@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>よくある質問|Excel時短ラボ</title>
+<meta name="description" content="安全性、動作環境、削除の方法など、よくある質問。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">本文へ移動</a>
+<header class="site"><div class="wrap">
+  <a class="brand" href="index.html">Excel時短ラボ</a>
+  <nav class="site" aria-label="メニュー">
+    <a href="index.html">トップ</a><a href="features.html">機能</a><a href="install.html">導入</a><a href="code.html">中身を確認</a><a href="faq.html" aria-current="page">よくある質問</a><a href="contact.html">お問い合わせ</a>
+  </nav>
+</div></header>
+
+<main id="main"><div class="wrap">
+  <h1>よくある質問</h1>
+  <p class="lead">つまずきやすいところを、質問と答えの形で、まとめました。</p>
+  <ul class="toc" aria-label="ページ内の移動"><li><a href="#q-install">導入でつまずいたとき</a></li><li><a href="#q-use">使うときの疑問</a></li><li><a href="#q-safe">安全について</a></li><li><a href="#q-other">そのほか</a></li></ul>
+
+  <h2 id="q-install">導入でつまずいたとき</h2>
+
+  <details open><summary>Q. Excelに「便利ツール」タブが出ません</summary>
+    <p>A. 次の順に、試してください。</p>
+    <ol class="steps">
+      <li>Excelを、すべて閉じて、もう一度開きます。</li>
+      <li>Excelの「ファイル」→「オプション」→「アドイン」を開きます。下の「管理」で「Excelアドイン」を選び、「設定」を押します。「CustomAddin」に、チェックが入っているか、確認します。</li>
+      <li>チェックが入っているのに出ないときは、ダウンロードの印が、残っているかもしれません。次の質問を、見てください。</li>
+    </ol>
+  </details>
+
+  <details><summary>Q. Excelの上に、黄色や赤の帯で「セキュリティ リスク」と出ます</summary>
+    <p>A. ダウンロードしたファイルに、Windowsの「ネット由来の印」が付いているためです。<a href="install.html">導入の手順</a>の、ZIPの「許可する」のチェックを行ってください。すでに導入したあとなら、<code>%AppData%\Microsoft\AddIns</code> の「CustomAddin.xlam」を右クリック →「プロパティ」で、「許可する」にチェックを入れます。そのあと、Excelを、開き直してください。</p>
+  </details>
+
+  <details><summary>Q. ZIPのプロパティに、「許可する」の欄がありません</summary>
+    <p>A. すでに許可されているか、もともとブロックされていません。そのまま、次の手順へ進んでください。古いWindowsでは、「ブロックの解除」と表示されます。</p>
+  </details>
+
+  <details><summary>Q. install.vbs をダブルクリックしても、うまくいきません</summary>
+    <p>A. 次の2つを、確認してください。</p>
+    <ul>
+      <li><b>ZIPを展開していない:</b> ZIPの中から、直接、実行していませんか(ZIPの中では、アドイン本体が見つからず、失敗することがあります)。ZIPを右クリックして、「すべて展開」を選び、できたフォルダの中の install.vbs を、実行してください。</li>
+      <li><b>Excelが開いている:</b> Excelが1つでも開いていると、失敗することがあります。すべて閉じてから、もう一度、実行してください。</li>
+    </ul>
+  </details>
+
+  <details><summary>Q. 「CustomAddin.xlam が見つかりません」と出ました</summary>
+    <p>A. install.vbs と同じフォルダに、「CustomAddin」(Microsoft Excel アドイン)が、ありません。ZIPを展開したフォルダの中で、install.vbs を実行しているか、確認してください。install.vbs だけを、別の場所へ移していると、このメッセージが出ます。</p>
+  </details>
+
+  <details><summary>Q. 「このファイルを開きますか?」と出ました</summary>
+    <p>A. install.vbs を、初めて実行するときに、出ることがあります。内容に不安があるときは、実行しないでください。install.vbs の中身は、<a href="code.html">「中身を確認」のページ</a>で、すべて読めます。納得したうえで、「開く」を選んでください。</p>
+  </details>
+
+  <details><summary>Q. ボタンを押しても、何も起きません/「マクロが無効」と出ます</summary>
+    <p>A. 「CustomAddin.xlam」に、ダウンロードの印が、残っています。上の質問(「セキュリティ リスク」)の手順で、印を外して、Excelを開き直してください。</p>
+  </details>
+
+  <details><summary>Q. 会社や学校のパソコンで、導入できません</summary>
+    <p>A. 管理者の設定で、スクリプトの実行や、アドインの追加が、禁止されていることがあります。無理に回避せず、管理者に、ご相談ください。</p>
+  </details>
+
+  <h2 id="q-use">使うときの疑問</h2>
+
+  <details><summary>Q. 「A1移動&保存」で、「まだ一度も保存されていません」と出ます</summary>
+    <p>A. 新しいブックは、保存先が決まっていないためです。先に、「名前を付けて保存」で、保存してから、もう一度、押してください。「読み取り専用」のブックも、保存できません。</p>
+  </details>
+
+  <details><summary>Q. 「空白行削除」で、「シートが保護されています」と出ます</summary>
+    <p>A. 保護されたシートでは、行を削除できません。「校閲」タブの「シート保護の解除」を押してから、もう一度、押してください。</p>
+  </details>
+
+  <details><summary>Q. 「空白行削除」で、見た目は空なのに、行が消えません</summary>
+    <p>A. 数式が入っている行は、空白とみなしません。数式の結果が、空の文字(見た目は空)でも、同じです。消したいときは、先に、「数式を値に」で値にするか、手で削除してください。</p>
+  </details>
+
+  <details><summary>Q. 実行してしまった操作は、元に戻せますか?</summary>
+    <p>A. マクロを実行したあとは、Excelの「元に戻す」(<code>Ctrl + Z</code>)が、使えなくなります。行の削除、数式を値に、重複行の削除などは、特に注意してください。多くのボタンは、実行の前に確認が出ます。大事なファイルは、先にコピーを取っておくと、安心です。保存する前なら、閉じて、保存せずに開き直す方法もあります。</p>
+  </details>
+
+  <details><summary>Q. 「PDF一括出力」で、PDFが作れません</summary>
+    <p>A. 印刷する内容のあるシートが、ないブックでは、作成できないことがあります。ブックに、データのあるシートがあるか、確認してください。</p>
+  </details>
+
+  <details><summary>Q. CSVが文字化けします</summary>
+    <p>A. 「CSVを結合・読込」は、文字コード(Shift-JIS / UTF-8)を、自動で見分けます。それでも化けるときは、元のCSVが、別の形式かもしれません。「CSVで保存」では、保存のときに、Shift-JISかUTF-8を、選べます。</p>
+  </details>
+
+  <details><summary>Q. 「表の突合」の結果が、思ったとおりになりません</summary>
+    <p>A. 次の点を、確認してください。</p>
+    <ul>
+      <li>キーの列を、正しく選んでいますか(請求番号など、1行ごとに決まる列です)。</li>
+      <li>見た目が同じでも、前後に空白があったり、全角と半角が混ざっていたりすると、別の値として扱われます。</li>
+      <li>数字の差を、いくつ以内なら同じとするか、指定できます。小数点以下の誤差が多いときは、指定してみてください。</li>
+    </ul>
+    <p>元の表は、変わりません。結果は、新しいシートに、色つきで出ます。</p>
+  </details>
+
+  <h2 id="q-safe">安全について</h2>
+
+  <details><summary>Q. マクロが入ったファイルは、危なくないですか?</summary>
+    <p>A. マクロ(VBA)は、Excelを自動で操作できる仕組みなので、不安に思うのは、自然なことです。このアドインは、コードを、すべて公開しています。<a href="code.html">「中身を確認」のページ</a>で、読めます。コードだけをダウンロードして、自分のExcelに取り込んで、確認することもできます。</p>
+    <p>ただし、公開しているのは、私たちが作ったコードです。ご自身で内容を確認できない場合は、会社や学校のルールに従って、使うかどうかを、ご判断ください。</p>
+  </details>
+
+  <details><summary>Q. インターネットに、通信しますか?</summary>
+    <p>A. 通信するコードは、含まれていません。公開しているコードで、確認できます(「中身を確認」のページに、確認のしかたを書いています)。</p>
+  </details>
+
+  <details><summary>Q. 自分のExcelファイルを、書き換えますか?</summary>
+    <p>A. ボタンを押したときだけ、そのボタンの機能で、開いているブックを操作します。CSVの結合や突合のように、結果を新しいシートに出す機能は、元のデータを変えません。行の削除、数式を値に、重複行の削除などは、元に戻せない操作です。多くのボタンは、実行の前に確認が出ます。大事なファイルは、先にコピーを取ってから、お使いください。</p>
+  </details>
+
+  <h2 id="q-other">そのほか</h2>
+
+  <details><summary>Q. MacやスマホのExcelでも使えますか?</summary>
+    <p>A. 使えません。Windows版のExcel用です。</p>
+  </details>
+
+  <details><summary>Q. どのバージョンのExcelで使えますか?</summary>
+    <p>A. 動作確認は、Windows版のExcel(バージョン16.0系)で行いました。それ以外のバージョンでの動作は、確認していません。</p>
+  </details>
+
+  <details><summary>Q. 削除(アンインストール)の方法は?</summary>
+    <p>A. <a href="install.html">導入の手順</a>の、「アンインストール」に書いています。uninstall.vbs を使うか、手で外せます。あなたのExcelファイルには、触りません。</p>
+  </details>
+
+  <details><summary>Q. 不具合や、ご要望は、どこに伝えればいいですか?</summary>
+    <p>A. <a href="contact.html">お問い合わせのページ</a>の、フォームから、お送りください。ファイルの中身、パスワード、個人情報は、書かないでください。</p>
+  </details>
+</div></main>
+
+<footer class="site"><div class="wrap">
+  <a href="privacy.html">プライバシーポリシー・免責</a> ・ <a href="faq.html">よくある質問</a><br>
+  © Excel時短ラボ
+
+  <p class="small" style="margin:10px 0 0;max-width:42em">注記: このサイトの文章と、アドインのコードは、AI(Anthropic社の「Claude」)の支援を受けて作成しています。AIの出力には、誤りが含まれることがあります。気になる点は、公開しているコードで、ご確認ください。</p>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,1596 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中身を確認する(コードの公開)|Excel時短ラボ</title>
+<meta name="description" content="アドインのVBAコードを、すべて公開しています。画面で読めて、コードだけをダウンロードして確認することもできます。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">本文へ移動</a>
+<header class="site"><div class="wrap">
+  <a class="brand" href="index.html">Excel時短ラボ</a>
+  <nav class="site" aria-label="メニュー">
+    <a href="index.html">トップ</a><a href="features.html">機能</a><a href="install.html">導入</a><a href="code.html" aria-current="page">中身を確認</a><a href="faq.html">よくある質問</a><a href="contact.html">お問い合わせ</a>
+  </nav>
+</div></header>
+
+<main id="main"><div class="wrap">
+  <h1>中身を確認する(コードの公開)</h1>
+  <p class="lead">アドインの中身(VBAコード)を、すべて公開しています。ファイルを開かなくても、ここで読めます。コードだけをダウンロードして、確認することもできます。</p>
+
+  <div class="ok">
+    <b>先に、結論です。</b>
+    <ul>
+      <li>インターネットへ通信するコードは、含まれていません。</li>
+      <li>他のプログラムを起動するコード(Shellなど)は、アドイン本体には、含まれていません。</li>
+      <li>使っている外部の部品は、2つだけです。<code>Scripting.Dictionary</code>(同じ値の照合に使う、辞書)と、<code>ADODB.Stream</code>(CSVの文字コードを読み書きする部品)です。どちらも、Windowsに入っています。</li>
+    </ul>
+  </div>
+
+  <h2>確認のしかた</h2>
+  <ol class="steps">
+    <li><b>画面で読む:</b> 下のファイルを開いて、読みます。ブラウザの検索(<code>Ctrl + F</code>)で、<code>Shell</code>、<code>XMLHTTP</code>、<code>WinHttp</code>、<code>URLDownload</code>、<code>Declare</code> を探してみてください。ネットへの通信や、他のプログラムの起動に使う言葉です。</li>
+    <li><b>コードだけをダウンロードする:</b> 下の表の「.bas」は、Excelに取り込むための形式です。「.txt」は、メモ帳などで読むための形式です。どちらも、アドイン本体(.xlam)より、警告が出にくい形です。</li>
+    <li><b>自分のExcelに取り込んで、確認する:</b> <b>新しい、空のブック</b>を開いて、<code>Alt + F11</code> でVBAの画面を開きます。「ファイル」→「ファイルのインポート」で、.bas を選びます。ブックは、「マクロ有効ブック(.xlsm)」で保存します。</li>
+  </ol>
+  <p class="note">コードを読んで分からない場合は、無理に使わないでください。会社や学校のパソコンでは、管理者のルールに従ってください。</p>
+
+  <h2>ファイルの一覧</h2>
+  <table>
+    <tr><th>ファイル</th><th>内容</th><th>ダウンロード</th></tr>
+    <tr><td>NewTools</td><td>重複行の削除、数式を値に、空白を強調、見出し固定&amp;列幅、書式の統一、シート複製(連番)、シート名に日付</td><td><a href="code/NewTools.bas" download>.bas</a> / <a href="code/NewTools.txt">.txt</a></td></tr>
+    <tr><td>CsvTools</td><td>CSVを結合・読込、列の並べ替え、CSVで保存</td><td><a href="code/CsvTools.bas" download>.bas</a> / <a href="code/CsvTools.txt">.txt</a></td></tr>
+    <tr><td>ReconTool</td><td>表の突合(2つの表の照合)</td><td><a href="code/ReconTool.bas" download>.bas</a> / <a href="code/ReconTool.txt">.txt</a></td></tr>
+    <tr><td>BasicTools</td><td>A1移動&amp;保存、空白行削除、PDF一括出力</td><td><a href="code/BasicTools.bas" download>.bas</a> / <a href="code/BasicTools.txt">.txt</a></td></tr>
+    <tr><td>install.vbs</td><td>インストール用のスクリプト(アドインのコピー、印の解除、Excelへの登録)</td><td><a href="code/install.vbs" download>.vbs</a> / <a href="code/install.txt">.txt</a></td></tr>
+    <tr><td>uninstall.vbs</td><td>削除用のスクリプト(アドインの登録を外して、ファイルを削除)</td><td><a href="code/uninstall.vbs" download>.vbs</a> / <a href="code/uninstall.txt">.txt</a></td></tr>
+  </table>
+
+  <h2>install.vbs について</h2>
+  <p>install.vbs は、「ダウンロードの印を外す」ために、Windowsの標準機能(PowerShellの <code>Unblock-File</code>)を、1回だけ呼び出します。ほかに、PowerShellを使う処理は、ありません。コードは、下で読めます。</p>
+
+  <h2>コード(画面で読む)</h2>
+  <details><summary>NewTools(237行)</summary><pre class="code">Attribute VB_Name = "NewTools"
+Option Explicit
+
+' 便利ツール 追加機能(重複行の削除 / 見出し固定と列幅調整 / 数式を値に / 空白の強調 / 書式の統一 / シート複製 / シート名に日付)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。ファイルの削除や、ネットへの送信は、しない。
+
+Private Const TITLE As String = "便利ツール"
+
+Private Function NT_Ask(ByVal msg As String) As Boolean
+    NT_Ask = (MsgBox(msg, vbYesNo + vbQuestion + vbDefaultButton2, TITLE) = vbYes)
+End Function
+
+Private Function NT_SelRange() As Range
+    ' 選択がセル範囲のときだけ返す(グラフなどを選んでいるときは Nothing)
+    If TypeName(Selection) = "Range" Then Set NT_SelRange = Selection
+End Function
+
+Private Function NT_SheetExists(ByVal nm As String) As Boolean
+    Dim ws As Object
+    For Each ws In ActiveWorkbook.Sheets
+        If StrComp(ws.Name, nm, vbTextCompare) = 0 Then NT_SheetExists = True: Exit Function
+    Next ws
+End Function
+
+' ---- 1. 重複行の削除 ----
+' Excel 標準の RemoveDuplicates は、この呼び出し方だと「引数が不正」になることがあるので、自分で重複を探して、下の行から削除する
+Sub Ribbon_RemoveDuplicates(control As IRibbonControl)
+    Dim rng As Range, ans As VbMsgBoxResult, data As Variant, dict As Object
+    Dim flags() As Boolean, r As Long, c As Long, key As String, startRow As Long, cnt As Long
+    Set rng = NT_SelRange()
+    If rng Is Nothing Then MsgBox "セル範囲を選んでから、押してください。", vbExclamation, TITLE: Exit Sub
+    If rng.Areas.Count &gt; 1 Then MsgBox "範囲は、1か所だけ選んでください。", vbExclamation, TITLE: Exit Sub
+    If rng.Cells.CountLarge = 1 Then Set rng = rng.CurrentRegion
+    If rng.Rows.Count &lt; 2 Then MsgBox "2行以上のデータを選んでください。", vbExclamation, TITLE: Exit Sub
+    ans = MsgBox("範囲 " &amp; rng.Address(False, False) &amp; " で、すべての列が同じ行を、重複として削除します(最初の1行は残します)。" &amp; vbCrLf &amp; vbCrLf &amp; _
+                 "1行目は、見出しですか?" &amp; vbCrLf &amp; _
+                 "  はい … 見出し(削除の対象にしない)" &amp; vbCrLf &amp; _
+                 "  いいえ … 見出しなし" &amp; vbCrLf &amp; _
+                 "  キャンセル … 中止" &amp; vbCrLf &amp; vbCrLf &amp; _
+                 "※ 元に戻せません。心配なら、先に、ファイルのコピーを取ってください。", _
+                 vbYesNoCancel + vbQuestion + vbDefaultButton3, TITLE)
+    If ans = vbCancel Then Exit Sub
+    startRow = IIf(ans = vbYes, 2, 1)
+    On Error GoTo EH
+    data = rng.Value2
+    Set dict = CreateObject("Scripting.Dictionary")
+    dict.CompareMode = vbTextCompare
+    ReDim flags(1 To UBound(data, 1))
+    For r = startRow To UBound(data, 1)
+        key = ""
+        For c = 1 To UBound(data, 2)
+            If IsError(data(r, c)) Then
+                key = key &amp; "#E" &amp; Chr(1)
+            Else
+                key = key &amp; CStr(data(r, c)) &amp; Chr(1)
+            End If
+        Next c
+        If dict.Exists(key) Then
+            flags(r) = True
+            cnt = cnt + 1
+        Else
+            dict.Add key, 1
+        End If
+    Next r
+    If cnt = 0 Then MsgBox "重複した行は、ありませんでした。", vbInformation, TITLE: Exit Sub
+    Application.ScreenUpdating = False
+    For r = UBound(data, 1) To startRow Step -1
+        If flags(r) Then rng.Rows(r).Delete Shift:=xlUp
+    Next r
+    Application.ScreenUpdating = True
+    MsgBox cnt &amp; " 行の重複を、削除しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "削除できませんでした。(" &amp; Err.Description &amp; ")", vbExclamation, TITLE
+End Sub
+
+
+' ---- 2. 見出し行の固定と、列幅の自動調整(全シート) ----
+Sub Ribbon_FreezeAutoFit(control As IRibbonControl)
+    Dim ws As Worksheet, cur As Object, skipped As Long
+    If Not NT_Ask("全シートの、1行目を見出しとして固定し、列幅を自動調整します。" &amp; vbCrLf &amp; "(今ある固定と、列幅は、置き換わります)" &amp; vbCrLf &amp; vbCrLf &amp; "よろしいですか?") Then Exit Sub
+    Set cur = ActiveSheet
+    Application.ScreenUpdating = False
+    For Each ws In ActiveWorkbook.Worksheets
+        If ws.Visible = xlSheetVisible Then
+            On Error Resume Next
+            Err.Clear
+            ws.Activate
+            ActiveWindow.FreezePanes = False
+            ActiveWindow.ScrollRow = 1
+            ActiveWindow.ScrollColumn = 1
+            ws.Range("A2").Select
+            ActiveWindow.FreezePanes = True
+            ws.Range("A1").Select
+            ws.UsedRange.Columns.AutoFit
+            If Err.Number &lt;&gt; 0 Then skipped = skipped + 1
+            On Error GoTo 0
+        End If
+    Next ws
+    cur.Activate
+    Application.ScreenUpdating = True
+    MsgBox "完了しました。" &amp; IIf(skipped &gt; 0, vbCrLf &amp; "(保護されているなどで、処理できなかったシート: " &amp; skipped &amp; ")", ""), vbInformation, TITLE
+End Sub
+
+' ---- 3. 全シートの書式の統一 ----
+Sub Ribbon_UnifyFormat(control As IRibbonControl)
+    Dim ws As Worksheet, cur As Object, fnt As String, sz As Double, skipped As Long
+    If Not NT_Ask("全シートの、データのある範囲に、次の書式をそろえます。" &amp; vbCrLf &amp; _
+                  "  ・フォント … いま開いているシートの A1 と同じ" &amp; vbCrLf &amp; _
+                  "  ・細い罫線(薄いグレー)" &amp; vbCrLf &amp; _
+                  "  ・1行目 … 太字、薄いグレーの背景" &amp; vbCrLf &amp; vbCrLf &amp; _
+                  "※ 元に戻せません。よろしいですか?") Then Exit Sub
+    Set cur = ActiveSheet
+    fnt = cur.Range("A1").Font.Name
+    sz = cur.Range("A1").Font.Size
+    Application.ScreenUpdating = False
+    For Each ws In ActiveWorkbook.Worksheets
+        If ws.Visible = xlSheetVisible Then
+            If Application.WorksheetFunction.CountA(ws.UsedRange) &gt; 0 Then
+                On Error Resume Next
+                Err.Clear
+                With ws.UsedRange
+                    .Font.Name = fnt
+                    .Font.Size = sz
+                    .Borders.LineStyle = xlContinuous
+                    .Borders.Weight = xlThin
+                    .Borders.Color = RGB(191, 191, 191)
+                    .Rows(1).Font.Bold = True
+                    .Rows(1).Interior.Color = RGB(242, 242, 242)
+                End With
+                If Err.Number &lt;&gt; 0 Then skipped = skipped + 1
+                On Error GoTo 0
+            End If
+        End If
+    Next ws
+    Application.ScreenUpdating = True
+    MsgBox "完了しました。" &amp; IIf(skipped &gt; 0, vbCrLf &amp; "(保護されているなどで、処理できなかったシート: " &amp; skipped &amp; ")", ""), vbInformation, TITLE
+End Sub
+
+' ---- 4. 数式を値に変換 ----
+Sub Ribbon_ToValues(control As IRibbonControl)
+    Dim rng As Range, a As Range, r As Range
+    Set rng = NT_SelRange()
+    If rng Is Nothing Then MsgBox "セル範囲を選んでから、押してください。", vbExclamation, TITLE: Exit Sub
+    If Not NT_Ask("選んだ範囲 " &amp; rng.Address(False, False) &amp; " の数式を、結果の値に置き換えます。" &amp; vbCrLf &amp; _
+                  "数式は、なくなります。元に戻せません。" &amp; vbCrLf &amp; vbCrLf &amp; "よろしいですか?") Then Exit Sub
+    On Error GoTo EH
+    For Each a In rng.Areas
+        Set r = Intersect(a, a.Worksheet.UsedRange)    ' 列全体などを選んだときに、重くならないように
+        If Not r Is Nothing Then r.Value = r.Value
+    Next a
+    MsgBox "値に変換しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    MsgBox "変換できませんでした。(" &amp; Err.Description &amp; ")", vbExclamation, TITLE
+End Sub
+
+' ---- 5. 空白セルの強調 / 解除 ----
+Sub Ribbon_HighlightBlank(control As IRibbonControl)
+    Dim target As Range, ans As VbMsgBoxResult, fc As Object, i As Long
+    Set target = NT_SelRange()
+    If target Is Nothing Then Set target = ActiveSheet.UsedRange
+    If target.Cells.CountLarge = 1 Then Set target = ActiveSheet.UsedRange
+    ans = MsgBox("範囲 " &amp; target.Address(False, False) &amp; " の空白セルを、色で強調します(条件付き書式)。" &amp; vbCrLf &amp; vbCrLf &amp; _
+                 "  はい … 黄色で強調する" &amp; vbCrLf &amp; _
+                 "  いいえ … 空白の強調を解除する" &amp; vbCrLf &amp; _
+                 "  キャンセル … 中止", vbYesNoCancel + vbQuestion, TITLE)
+    If ans = vbCancel Then Exit Sub
+    On Error GoTo EH
+    If ans = vbYes Then
+        Set fc = target.FormatConditions.Add(Type:=xlBlanksCondition)
+        fc.SetFirstPriority
+        fc.Interior.Color = RGB(255, 242, 102)
+    Else
+        For i = target.FormatConditions.Count To 1 Step -1
+            If target.FormatConditions(i).Type = xlBlanksCondition Then target.FormatConditions(i).Delete
+        Next i
+    End If
+    MsgBox "完了しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    MsgBox "処理できませんでした。(" &amp; Err.Description &amp; ")", vbExclamation, TITLE
+End Sub
+
+' ---- 6. シートの複製(連番) ----
+Sub Ribbon_CopySheet(control As IRibbonControl)
+    Dim s As String, n As Long, i As Long, k As Long, src As Object, base As String, nm As String, suffix As String
+    If ActiveSheet Is Nothing Then Exit Sub
+    s = InputBox("いま開いているシート「" &amp; ActiveSheet.Name &amp; "」を、何枚、複製しますか?(1?50)" &amp; vbCrLf &amp; "名前は、「元の名前_1」「元の名前_2」…になります。", TITLE, "3")
+    If Len(s) = 0 Then Exit Sub
+    If Not IsNumeric(s) Then MsgBox "数字で入力してください。", vbExclamation, TITLE: Exit Sub
+    n = CLng(s)
+    If n &lt; 1 Or n &gt; 50 Then MsgBox "1?50の数字にしてください。", vbExclamation, TITLE: Exit Sub
+    Set src = ActiveSheet
+    base = src.Name
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    For i = 1 To n
+        Do
+            k = k + 1
+            suffix = "_" &amp; k
+            nm = Left$(base, 31 - Len(suffix)) &amp; suffix
+        Loop While NT_SheetExists(nm)
+        src.Copy After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count)
+        ActiveSheet.Name = nm
+        src.Activate
+    Next i
+    Application.ScreenUpdating = True
+    MsgBox n &amp; " 枚、複製しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "途中で止まりました。(" &amp; Err.Description &amp; ")", vbExclamation, TITLE
+End Sub
+
+' ---- 7. シート名の先頭に、日付(yyyymmdd_)を付ける ----
+Sub Ribbon_RenameSheets(control As IRibbonControl)
+    Dim ws As Object, pre As String, nm As String, done As Long, skipped As Long
+    pre = Format(Date, "yyyymmdd") &amp; "_"
+    If Not NT_Ask("全シートの名前の先頭に、「" &amp; pre &amp; "」を付けます。(31文字を超える分は、後ろを切ります)" &amp; vbCrLf &amp; vbCrLf &amp; "よろしいですか?") Then Exit Sub
+    On Error Resume Next
+    For Each ws In ActiveWorkbook.Sheets
+        If Left$(ws.Name, Len(pre)) &lt;&gt; pre Then
+            nm = Left$(pre &amp; ws.Name, 31)
+            If NT_SheetExists(nm) Then
+                skipped = skipped + 1
+            Else
+                Err.Clear
+                ws.Name = nm
+                If Err.Number &lt;&gt; 0 Then skipped = skipped + 1 Else done = done + 1
+            End If
+        End If
+    Next ws
+    On Error GoTo 0
+    MsgBox done &amp; " 枚の名前を変えました。" &amp; IIf(skipped &gt; 0, vbCrLf &amp; "(名前が重なるなどで、変えなかったシート: " &amp; skipped &amp; ")", ""), vbInformation, TITLE
+End Sub</pre></details>
+  <details><summary>CsvTools(620行)</summary><pre class="code">Attribute VB_Name = "CsvTools"
+Option Explicit
+
+' CSVツール(CSVの結合・読み込み / 列の並べ替え / CSVで保存)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。
+' 読み込んだCSVは書き換えない。結果は、新しいシートに出す。ファイルの削除や、ネットへの送信は、しない。
+Private Const TITLE As String = "CSVツール"
+Private Const MAX_ROWS As Long = 1048576
+
+' ---------------------------------------------------------------
+' 共通: CSVの読み込み
+' ---------------------------------------------------------------
+Private Function Csv_IsUtf8(b() As Byte, ByRef hasHigh As Boolean) As Boolean
+    Dim i As Long, n As Long, c As Long, k As Long, j As Long
+    n = UBound(b)
+    i = 0
+    Do While i &lt;= n
+        c = b(i)
+        If c &lt; &amp;H80 Then
+            i = i + 1
+        Else
+            hasHigh = True
+            If c &gt;= &amp;HC2 And c &lt;= &amp;HDF Then
+                k = 1
+            ElseIf c &gt;= &amp;HE0 And c &lt;= &amp;HEF Then
+                k = 2
+            ElseIf c &gt;= &amp;HF0 And c &lt;= &amp;HF4 Then
+                k = 3
+            Else
+                Exit Function
+            End If
+            If i + k &gt; n Then Exit Function
+            For j = 1 To k
+                If (b(i + j) And &amp;HC0) &lt;&gt; &amp;H80 Then Exit Function
+            Next j
+            i = i + k + 1
+        End If
+    Loop
+    Csv_IsUtf8 = True
+End Function
+
+' 文字コードを自動で見分けて(UTF-8 / Shift-JIS / UTF-16)、全体を文字列で返す
+Private Function Csv_ReadText(ByVal path As String, ByRef encName As String) As String
+    Dim st As Object, b() As Byte, cs As String, hasHigh As Boolean, s As String
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 1
+    st.Open
+    st.LoadFromFile path
+    If st.Size = 0 Then
+        st.Close
+        encName = "空のファイル"
+        Exit Function
+    End If
+    b = st.Read
+    st.Close
+    If UBound(b) &gt;= 2 Then
+        If b(0) = &amp;HEF And b(1) = &amp;HBB And b(2) = &amp;HBF Then
+            cs = "utf-8"
+            encName = "UTF-8(BOM付き)"
+        End If
+    End If
+    If Len(cs) = 0 And UBound(b) &gt;= 1 Then
+        If b(0) = &amp;HFF And b(1) = &amp;HFE Then
+            cs = "unicode"
+            encName = "UTF-16"
+        End If
+    End If
+    If Len(cs) = 0 Then
+        If Csv_IsUtf8(b, hasHigh) Then
+            cs = "utf-8"
+            encName = IIf(hasHigh, "UTF-8", "ASCII")
+        Else
+            cs = "shift_jis"
+            encName = "Shift-JIS"
+        End If
+    End If
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 2
+    st.Charset = cs
+    st.Open
+    st.LoadFromFile path
+    s = st.ReadText(-1)
+    st.Close
+    If Len(s) &gt; 0 Then
+        If AscW(Left$(s, 1)) = &amp;HFEFF Then s = Mid$(s, 2)
+    End If
+    Csv_ReadText = s
+End Function
+
+Private Function Csv_DetectDelim(ByVal txt As String) As String
+    Dim p As Long, head As String, nc As Long, nt As Long, ns As Long
+    p = InStr(txt, vbLf)
+    If p = 0 Then head = txt Else head = Left$(txt, p - 1)
+    nc = Len(head) - Len(Replace(head, ",", ""))
+    nt = Len(head) - Len(Replace(head, vbTab, ""))
+    ns = Len(head) - Len(Replace(head, ";", ""))
+    Csv_DetectDelim = ","
+    If nt &gt; nc And nt &gt;= ns Then Csv_DetectDelim = vbTab
+    If ns &gt; nc And ns &gt; nt Then Csv_DetectDelim = ";"
+End Function
+
+' 1レコード(引用符つきの、改行入りの項目も含む)を、項目に分ける
+Private Function Csv_SplitRec(ByVal rec As String, ByVal delim As String) As String()
+    Dim res() As String, n As Long, i As Long, L As Long
+    Dim ch As String, inQ As Boolean, cur As String
+    If InStr(rec, """") = 0 Then
+        Csv_SplitRec = Split(rec, delim)
+        Exit Function
+    End If
+    ReDim res(0 To 31)
+    n = -1
+    L = Len(rec)
+    i = 1
+    Do While i &lt;= L
+        ch = Mid$(rec, i, 1)
+        If inQ Then
+            If ch = """" Then
+                If i &lt; L And Mid$(rec, i + 1, 1) = """" Then
+                    cur = cur &amp; """"
+                    i = i + 1
+                Else
+                    inQ = False
+                End If
+            Else
+                cur = cur &amp; ch
+            End If
+        ElseIf ch = """" Then
+            inQ = True
+        ElseIf ch = delim Then
+            n = n + 1
+            If n &gt; UBound(res) Then ReDim Preserve res(0 To UBound(res) * 2 + 1)
+            res(n) = cur
+            cur = ""
+        Else
+            cur = cur &amp; ch
+        End If
+        i = i + 1
+    Loop
+    n = n + 1
+    If n &gt; UBound(res) Then ReDim Preserve res(0 To UBound(res) * 2 + 1)
+    res(n) = cur
+    ReDim Preserve res(0 To n)
+    Csv_SplitRec = res
+End Function
+
+' 項目1つを、セルに入れる値にする。
+' ・=, +, @ で始まる文字は、数式として動かさず、文字のまま入れる(CSVの中の数式が、実行されるのを防ぐ)
+' ・001 のように先頭が 0 の番号や、16桁以上の番号は、文字のまま入れる(0や下の桁が消えないように)
+Private Function Csv_Cell(ByVal s As String) As Variant
+    Dim c1 As String
+    If Len(s) = 0 Then Exit Function
+    c1 = Left$(s, 1)
+    If c1 = "=" Or c1 = "+" Or c1 = "@" Then
+        Csv_Cell = "'" &amp; s
+    ElseIf c1 = "-" And Not IsNumeric(s) Then
+        Csv_Cell = "'" &amp; s
+    ElseIf Not (s Like "*[!0-9]*") And ((c1 = "0" And Len(s) &gt; 1) Or Len(s) &gt;= 16) Then
+        Csv_Cell = "'" &amp; s
+    Else
+        Csv_Cell = s
+    End If
+End Function
+
+' 見出しの名前として使うため、先頭の ' を外した文字にする
+Private Function Csv_Plain(ByVal v As Variant) As String
+    Dim s As String
+    If IsEmpty(v) Then Exit Function
+    s = CStr(v)
+    If Left$(s, 1) = "'" Then s = Mid$(s, 2)
+    Csv_Plain = s
+End Function
+
+' CSV全体を、2次元の配列(行, 列)にする。空の行は飛ばす
+Private Function Csv_Parse(ByVal txt As String, ByRef nRows As Long, ByRef nCols As Long) As Variant
+    Dim delim As String, lines() As String, i As Long, ub As Long, rec As String
+    Dim recs() As Variant, cnt As Long, f() As String, r As Long, c As Long
+    Dim out() As Variant
+    txt = Replace(txt, vbCrLf, vbLf)
+    txt = Replace(txt, vbCr, vbLf)
+    delim = Csv_DetectDelim(txt)
+    lines = Split(txt, vbLf)
+    ub = UBound(lines)
+    ReDim recs(1 To 1024)
+    nCols = 0
+    i = 0
+    Do While i &lt;= ub
+        rec = lines(i)
+        i = i + 1
+        Do While ((Len(rec) - Len(Replace(rec, """", ""))) Mod 2 = 1) And i &lt;= ub
+            rec = rec &amp; vbLf &amp; lines(i)
+            i = i + 1
+        Loop
+        If Len(rec) &gt; 0 Then
+            f = Csv_SplitRec(rec, delim)
+            cnt = cnt + 1
+            If cnt &gt; UBound(recs) Then ReDim Preserve recs(1 To UBound(recs) * 2)
+            recs(cnt) = f
+            If UBound(f) + 1 &gt; nCols Then nCols = UBound(f) + 1
+        End If
+    Loop
+    nRows = cnt
+    If cnt = 0 Then
+        Csv_Parse = Empty
+        Exit Function
+    End If
+    ReDim out(1 To cnt, 1 To nCols)
+    For r = 1 To cnt
+        f = recs(r)
+        For c = 0 To UBound(f)
+            out(r, c + 1) = Csv_Cell(f(c))
+        Next c
+        recs(r) = Empty
+    Next r
+    Csv_Parse = out
+End Function
+
+Private Function Csv_UniqueSheetName(ByVal baseName As String) As String
+    Dim nm As String, n As Long, ws As Object, hit As Boolean
+    nm = baseName
+    n = 1
+    Do
+        hit = False
+        For Each ws In ActiveWorkbook.Sheets
+            If StrComp(ws.Name, nm, vbTextCompare) = 0 Then hit = True: Exit For
+        Next ws
+        If Not hit Then Exit Do
+        n = n + 1
+        nm = baseName &amp; "(" &amp; n &amp; ")"
+    Loop
+    Csv_UniqueSheetName = nm
+End Function
+
+' ---------------------------------------------------------------
+' 1. CSVを結合・読み込み
+' ---------------------------------------------------------------
+Sub Ribbon_CsvMerge(control As IRibbonControl)
+    Dim fd As Object, nF As Long, k As Long, i As Long, tmp As String
+    Dim paths() As String, hasHdr As Boolean, addSrc As Boolean, ans As VbMsgBoxResult
+    Dim ws As Worksheet, msg As String
+
+    Set fd = Application.FileDialog(3)
+    With fd
+        .TITLE = "結合・読み込みするCSVを選んでください(複数選べます)"
+        .AllowMultiSelect = True
+        .Filters.Clear
+        .Filters.Add "CSVファイル", "*.csv;*.txt"
+        .Filters.Add "すべてのファイル", "*.*"
+        If .Show &lt;&gt; -1 Then Exit Sub
+        nF = .SelectedItems.Count
+        ReDim paths(1 To nF)
+        For k = 1 To nF
+            paths(k) = .SelectedItems(k)
+        Next k
+    End With
+    ' ファイル名の順にそろえる(毎回、同じ順番になるように)
+    For k = 1 To nF - 1
+        For i = k + 1 To nF
+            If StrComp(paths(i), paths(k), vbTextCompare) &lt; 0 Then tmp = paths(k): paths(k) = paths(i): paths(i) = tmp
+        Next i
+    Next k
+
+    ans = MsgBox("選んだ " &amp; nF &amp; " 個のCSVの1行目は、見出し(列の名前)ですか?" &amp; vbCrLf &amp; vbCrLf &amp; _
+                 "はい … 見出しの名前で列をそろえて、結合します(列の並びが違っても大丈夫)" &amp; vbCrLf &amp; _
+                 "いいえ … 見出しなし。左から順に、積み重ねます" &amp; vbCrLf &amp; _
+                 "キャンセル … 中止", vbYesNoCancel + vbQuestion, TITLE)
+    If ans = vbCancel Then Exit Sub
+    hasHdr = (ans = vbYes)
+    addSrc = (MsgBox("先頭の列に、元のファイル名を入れますか?", vbYesNo + vbQuestion, TITLE) = vbYes)
+    Set ws = Csv_DoMerge(paths, hasHdr, addSrc, msg)
+    MsgBox msg, IIf(ws Is Nothing, vbExclamation, vbInformation), TITLE
+End Sub
+
+' 結合の本体。成功したら、新しいシートを返す(失敗したら Nothing)。msg に、ユーザーへの報告を入れる
+' paths は、1 から始まる配列
+Private Function Csv_DoMerge(paths() As String, ByVal hasHdr As Boolean, ByVal addSrc As Boolean, ByRef msg As String) As Worksheet
+    Dim nF As Long, k As Long, sc As Long
+    Dim names() As String, encs() As String
+    Dim datas() As Variant, maps() As Variant, rowsN() As Long, colsN() As Long
+    Dim hdrDict As Object, used As Object, hdrList() As String, nHdr As Long
+    Dim m() As Long, c As Long, nm As String, key As String, cnt As Long, txt As String
+    Dim totalRows As Long, startRow As Long, outCols As Long, nR As Long, r As Long, nxt As Long
+    Dim ws As Worksheet, a() As Variant, src As Variant, dataRows As Long
+    Dim diffCols As Boolean, shown As Long
+    nF = UBound(paths)
+    sc = IIf(addSrc, 1, 0)
+    startRow = IIf(hasHdr, 2, 1)
+
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    ReDim datas(1 To nF): ReDim maps(1 To nF)
+    ReDim rowsN(1 To nF): ReDim colsN(1 To nF)
+    ReDim names(1 To nF): ReDim encs(1 To nF)
+
+    ' 読み込み(CSVは書き換えない)
+    For k = 1 To nF
+        names(k) = Mid$(paths(k), InStrRev(paths(k), "\") + 1)
+        txt = Csv_ReadText(paths(k), encs(k))
+        datas(k) = Csv_Parse(txt, rowsN(k), colsN(k))
+        txt = ""
+    Next k
+
+    ' 列の対応づけ(見出しの名前、または左からの順)
+    Set hdrDict = CreateObject("Scripting.Dictionary")
+    hdrDict.CompareMode = vbTextCompare
+    ReDim hdrList(1 To 64)
+    For k = 1 To nF
+        If colsN(k) &gt; 0 Then
+            src = datas(k)
+            ReDim m(1 To colsN(k))
+            If hasHdr Then
+                Set used = CreateObject("Scripting.Dictionary")
+                used.CompareMode = vbTextCompare
+                For c = 1 To colsN(k)
+                    nm = Trim$(Csv_Plain(src(1, c)))
+                    If Len(nm) = 0 Then nm = "(列" &amp; c &amp; ")"
+                    key = nm
+                    cnt = 1
+                    Do While used.Exists(key)
+                        cnt = cnt + 1
+                        key = nm &amp; "(" &amp; cnt &amp; ")"
+                    Loop
+                    used.Add key, 1
+                    If Not hdrDict.Exists(key) Then
+                        nHdr = nHdr + 1
+                        hdrDict.Add key, nHdr
+                        If nHdr &gt; UBound(hdrList) Then ReDim Preserve hdrList(1 To nHdr * 2)
+                        hdrList(nHdr) = key
+                    End If
+                    m(c) = hdrDict(key)
+                Next c
+            Else
+                For c = 1 To colsN(k)
+                    m(c) = c
+                Next c
+                If colsN(k) &gt; nHdr Then nHdr = colsN(k)
+            End If
+            maps(k) = m
+        End If
+    Next k
+    If nHdr = 0 Then
+        Application.ScreenUpdating = True
+        msg = "読み込める行がありませんでした。"
+        Exit Function
+    End If
+
+    ' 行数の確認
+    totalRows = IIf(hasHdr, 1, 0)
+    For k = 1 To nF
+        If colsN(k) &gt; 0 And rowsN(k) &gt;= startRow Then totalRows = totalRows + rowsN(k) - startRow + 1
+        If colsN(k) &lt;&gt; nHdr Then diffCols = True
+    Next k
+    outCols = nHdr + sc
+    If totalRows &gt; MAX_ROWS Or outCols &gt; 16384 Then
+        Application.ScreenUpdating = True
+        msg = "Excelの上限(" &amp; Format(MAX_ROWS, "#,##0") &amp; " 行 / 16384 列)を超えるため、結合できません。"
+        Exit Function
+    End If
+
+    ' 書き出し(新しいシートに)
+    If Workbooks.Count = 0 Then Workbooks.Add
+    Set ws = ActiveWorkbook.Worksheets.Add(After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count))
+    ws.Name = Csv_UniqueSheetName("CSV結合")
+    nxt = 1
+    If hasHdr Then
+        ReDim a(1 To 1, 1 To outCols)
+        If addSrc Then a(1, 1) = "元ファイル"
+        For c = 1 To nHdr
+            a(1, sc + c) = Csv_Cell(hdrList(c))
+        Next c
+        ws.Cells(1, 1).Resize(1, outCols).Value2 = a
+        nxt = 2
+    End If
+    For k = 1 To nF
+        If colsN(k) &gt; 0 And rowsN(k) &gt;= startRow Then
+            src = datas(k)
+            m = maps(k)
+            nR = rowsN(k) - startRow + 1
+            ReDim a(1 To nR, 1 To outCols)
+            For r = 1 To nR
+                If addSrc Then a(r, 1) = Csv_Cell(names(k))
+                For c = 1 To colsN(k)
+                    a(r, sc + m(c)) = src(r + startRow - 1, c)
+                Next c
+            Next r
+            ws.Cells(nxt, 1).Resize(nR, outCols).Value2 = a
+            nxt = nxt + nR
+            dataRows = dataRows + nR
+        End If
+        datas(k) = Empty
+    Next k
+    If hasHdr Then ws.Rows(1).Font.Bold = True
+    If totalRows &lt;= 50000 Then ws.Columns.AutoFit
+    ws.Activate
+    ws.Cells(1, 1).Select
+    Application.ScreenUpdating = True
+
+    ' 報告(検算つき)
+    msg = "結合しました。新しいシート「" &amp; ws.Name &amp; "」を見てください。" &amp; vbCrLf &amp; vbCrLf
+    For k = 1 To nF
+        If shown &gt;= 15 Then Exit For
+        shown = shown + 1
+        msg = msg &amp; names(k) &amp; " … " &amp; encs(k) &amp; " / " &amp; IIf(colsN(k) &gt; 0, rowsN(k) - IIf(hasHdr, 1, 0), 0) &amp; " 行" &amp; vbCrLf
+    Next k
+    If nF &gt; shown Then msg = msg &amp; "ほか " &amp; (nF - shown) &amp; " 個" &amp; vbCrLf
+    msg = msg &amp; vbCrLf &amp; "合計 " &amp; Format(dataRows, "#,##0") &amp; " 行" &amp; IIf(hasHdr, "(見出しを除く)", "") &amp; " / " &amp; nHdr &amp; " 列" &amp; vbCrLf
+    If (nxt - 1) = totalRows Then
+        msg = msg &amp; "検算: 書き込んだ行数が、各ファイルの行数の合計と一致しました。"
+    Else
+        msg = msg &amp; "検算: 行数が一致しません。結果を確認してください。"
+    End If
+    If diffCols Then msg = msg &amp; vbCrLf &amp; "※ ファイルによって列の数が違います。ないところは空白です。"
+    Set Csv_DoMerge = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" &amp; vbCrLf &amp; Err.Description
+    If Not ws Is Nothing Then
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+    End If
+End Function
+
+' ---------------------------------------------------------------
+' 2. 列の並べ替え・選択(新しいシートに出す)
+' ---------------------------------------------------------------
+Sub Ribbon_CsvColumns(control As IRibbonControl)
+    Dim ws As Object, ur As Range, nc As Long, i As Long, prev As String
+    Dim spec As String, nw As Worksheet, msg As String
+    If Workbooks.Count = 0 Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ws = ActiveSheet
+    If TypeName(ws) &lt;&gt; "Worksheet" Then MsgBox "ワークシートを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ur = ws.UsedRange
+    If ur.Cells.CountLarge &lt; 2 Then MsgBox "このシートには、データがありません。", vbExclamation, TITLE: Exit Sub
+    nc = ur.Columns.Count
+    For i = 1 To nc
+        If i &gt; 30 Then prev = prev &amp; "...(以降は省略)": Exit For
+        prev = prev &amp; i &amp; "=" &amp; Left$(CStr(ur.Cells(1, i).Value), 8) &amp; "  "
+    Next i
+    spec = InputBox("新しい列の順番を、番号か列の名前で、カンマで区切って入れてください。" &amp; vbCrLf &amp; _
+                    "例: 3,1,2   または   日付,金額" &amp; vbCrLf &amp; _
+                    "・書かなかった列は、新しいシートに出ません。" &amp; vbCrLf &amp; _
+                    "・同じ列を2回書くと、2回出ます。" &amp; vbCrLf &amp; vbCrLf &amp; prev, TITLE, "")
+    If Len(Trim$(spec)) = 0 Then Exit Sub
+    Set nw = Csv_DoColumns(ws, spec, msg)
+    MsgBox msg, IIf(nw Is Nothing, vbExclamation, vbInformation), TITLE
+End Sub
+
+' 列の並べ替えの本体。成功したら、新しいシートを返す(失敗したら Nothing)。msg に、ユーザーへの報告を入れる
+Private Function Csv_DoColumns(ByVal ws As Object, ByVal spec As String, ByRef msg As String) As Worksheet
+    Dim ur As Range, nc As Long, i As Long, j As Long
+    Dim toks() As String, idx() As Long, t As String, tn As String, n As Long
+    Dim found As Long, bad As String, nw As Worksheet
+    Set ur = ws.UsedRange
+    nc = ur.Columns.Count
+    spec = Replace(Replace(spec, "、", ","), "，", ",")
+    toks = Split(spec, ",")
+    ReDim idx(1 To UBound(toks) + 1)
+    n = 0
+    For i = 0 To UBound(toks)
+        t = Trim$(toks(i))
+        If Len(t) &gt; 0 Then
+            tn = StrConv(t, vbNarrow)
+            found = 0
+            If IsNumeric(tn) Then
+                If CDbl(tn) &gt;= 1 And CDbl(tn) &lt;= nc And CDbl(tn) = Int(CDbl(tn)) Then found = CLng(tn)
+            Else
+                For j = 1 To nc
+                    If StrComp(Trim$(CStr(ur.Cells(1, j).Value)), t, vbTextCompare) = 0 Then found = j: Exit For
+                Next j
+                If found = 0 And Len(tn) &lt;= 3 And Not (tn Like "*[!A-Za-z]*") Then
+                    j = ws.Range(tn &amp; "1").Column - ur.Column + 1
+                    If j &gt;= 1 And j &lt;= nc Then found = j
+                End If
+            End If
+            If found = 0 Then
+                bad = bad &amp; "「" &amp; t &amp; "」"
+            Else
+                n = n + 1
+                idx(n) = found
+            End If
+        End If
+    Next i
+    If Len(bad) &gt; 0 Then
+        msg = "次の指定は、列として見つかりませんでした: " &amp; bad &amp; vbCrLf &amp; "もう一度、やり直してください。"
+        Exit Function
+    End If
+    If n = 0 Then
+        msg = "列が指定されていません。"
+        Exit Function
+    End If
+
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    Set nw = ActiveWorkbook.Worksheets.Add(After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count))
+    nw.Name = Csv_UniqueSheetName("列並べ替え")
+    For j = 1 To n
+        ur.Columns(idx(j)).Copy
+        nw.Cells(1, j).PasteSpecial Paste:=xlPasteValuesAndNumberFormats
+        nw.Columns(j).ColumnWidth = ur.Columns(idx(j)).ColumnWidth
+    Next j
+    Application.CutCopyMode = False
+    nw.Activate
+    nw.Cells(1, 1).Select
+    Application.ScreenUpdating = True
+    msg = "新しいシート「" &amp; nw.Name &amp; "」に、" &amp; n &amp; " 列を並べました。元のシートは、そのままです。" &amp; vbCrLf &amp; "(数式は、結果の値になります)"
+    Set Csv_DoColumns = nw
+    Exit Function
+EH:
+    Application.CutCopyMode = False
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" &amp; vbCrLf &amp; Err.Description
+End Function
+
+' ---------------------------------------------------------------
+' 3. 開いているシートを、CSVで保存
+' ---------------------------------------------------------------
+Private Function Csv_Field(ByVal v As Variant, ByRef errs As Long) As String
+    Dim s As String
+    Select Case VarType(v)
+        Case vbEmpty, vbNull
+            s = ""
+        Case vbError
+            s = ""
+            errs = errs + 1
+        Case vbDate
+            If CDbl(v) &lt; 1 Then
+                s = Format$(v, "hh:nn:ss")
+            ElseIf CDbl(v) = Int(CDbl(v)) Then
+                s = Format$(v, "yyyy/mm/dd")
+            Else
+                s = Format$(v, "yyyy/mm/dd hh:nn:ss")
+            End If
+        Case vbBoolean
+            s = IIf(v, "TRUE", "FALSE")
+        Case Else
+            s = CStr(v)
+    End Select
+    If InStr(s, ",") &gt; 0 Or InStr(s, """") &gt; 0 Or InStr(s, vbLf) &gt; 0 Or InStr(s, vbCr) &gt; 0 _
+       Or Left$(s, 1) = " " Or Right$(s, 1) = " " Then
+        s = """" &amp; Replace(s, """", """""") &amp; """"
+    End If
+    Csv_Field = s
+End Function
+
+Private Sub Csv_WriteText(ByVal path As String, ByVal txt As String, ByVal cs As String)
+    Dim st As Object
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 2
+    st.Charset = cs
+    st.Open
+    st.WriteText txt
+    st.SaveToFile path, 2
+    st.Close
+End Sub
+
+Sub Ribbon_CsvSave(control As IRibbonControl)
+    Dim ws As Object, ur As Range
+    Dim ans As VbMsgBoxResult, cs As String, fn As Variant, path As String, msg As String, ok As Boolean
+    If Workbooks.Count = 0 Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ws = ActiveSheet
+    If TypeName(ws) &lt;&gt; "Worksheet" Then MsgBox "ワークシートを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ur = ws.UsedRange
+    If ur.Cells.CountLarge &gt; 5000000 Then MsgBox "データが大きすぎます(500万セルまで)。", vbExclamation, TITLE: Exit Sub
+    ans = MsgBox("このシート「" &amp; ws.Name &amp; "」を、CSVで保存します。" &amp; vbCrLf &amp; vbCrLf &amp; _
+                 "はい … Shift-JIS(日本のExcelや会計ソフトで開く用)" &amp; vbCrLf &amp; _
+                 "いいえ … UTF-8(BOM付き。海外のソフトやWeb用)" &amp; vbCrLf &amp; _
+                 "キャンセル … 中止" &amp; vbCrLf &amp; vbCrLf &amp; _
+                 "※ 保存されるのは、セルの値だけです。数式は結果、色や罫線は保存されません。", _
+                 vbYesNoCancel + vbQuestion, TITLE)
+    If ans = vbCancel Then Exit Sub
+    cs = IIf(ans = vbYes, "shift_jis", "utf-8")
+    fn = Application.GetSaveAsFilename(InitialFileName:=ws.Name &amp; ".csv", FileFilter:="CSVファイル (*.csv),*.csv", TITLE:="CSVの保存先")
+    If VarType(fn) = vbBoolean Then Exit Sub
+    path = CStr(fn)
+    If LCase$(Right$(path, 4)) &lt;&gt; ".csv" Then path = path &amp; ".csv"
+    ok = Csv_DoSave(ws, path, cs, msg)
+    MsgBox msg, IIf(ok, vbInformation, vbExclamation), TITLE
+End Sub
+
+' 保存の本体。cs は "shift_jis" か "utf-8"。成功したら True。msg に、ユーザーへの報告を入れる
+Private Function Csv_DoSave(ByVal ws As Object, ByVal path As String, ByVal cs As String, ByRef msg As String) As Boolean
+    Dim ur As Range, data As Variant, one(1 To 1, 1 To 1) As Variant
+    Dim r As Long, c As Long, nR As Long, nc As Long, f() As String, lines() As String
+    Dim errs As Long, txt As String, back As String, enc As String
+    Set ur = ws.UsedRange
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    If ur.Cells.CountLarge = 1 Then
+        one(1, 1) = ur.Value
+        data = one
+    Else
+        data = ur.Value
+    End If
+    nR = UBound(data, 1)
+    nc = UBound(data, 2)
+    ReDim f(1 To nc)
+    ReDim lines(1 To nR)
+    For r = 1 To nR
+        For c = 1 To nc
+            f(c) = Csv_Field(data(r, c), errs)
+        Next c
+        lines(r) = Join(f, ",")
+    Next r
+    txt = Join(lines, vbCrLf) &amp; vbCrLf
+    Csv_WriteText path, txt, cs
+    Application.ScreenUpdating = True
+
+    msg = "保存しました。" &amp; vbCrLf &amp; path &amp; vbCrLf &amp; nR &amp; " 行 / " &amp; nc &amp; " 列"
+    If cs = "shift_jis" Then
+        back = Csv_ReadText(path, enc)
+        If back &lt;&gt; txt Then msg = msg &amp; vbCrLf &amp; vbCrLf &amp; "※ Shift-JIS にない文字が、「?」に変わった可能性があります。UTF-8 でも保存できます。"
+    End If
+    If errs &gt; 0 Then msg = msg &amp; vbCrLf &amp; vbCrLf &amp; "※ エラー値のセルが " &amp; errs &amp; " 個ありました(空白で保存しました)。"
+    Csv_DoSave = True
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" &amp; vbCrLf &amp; Err.Description
+End Function</pre></details>
+  <details><summary>ReconTool(394行)</summary><pre class="code">Attribute VB_Name = "ReconTool"
+Option Explicit
+
+' 表の突合(2つの表を、キーの列で照らし合わせて、差を一覧にする)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。元の表は書き換えない。結果は、新しいシートに出す。
+' 例: 請求書と発注書 / 売上と入金 / 名簿の新旧 などの照合
+Private Const TITLE As String = "突合ツール"
+
+' ---------------------------------------------------------------
+' 共通
+' ---------------------------------------------------------------
+' セルの値を、比べるための文字にする(前後の空白と、全角の空白をなくす)
+Private Function Rc_Norm(ByVal v As Variant) As String
+    Dim s As String
+    If IsError(v) Then Rc_Norm = "#ERR": Exit Function
+    If IsEmpty(v) Then Exit Function
+    ' 日付の値は、46336 のような数字ではなく、日付の文字にする(時刻が入っているときだけ、時刻も付ける)
+    If VarType(v) = vbDate Then
+        If v = Int(v) Then
+            Rc_Norm = Format$(v, "yyyy/mm/dd")
+        Else
+            Rc_Norm = Format$(v, "yyyy/mm/dd hh:nn")
+        End If
+        Exit Function
+    End If
+    s = CStr(v)
+    s = Replace(s, ChrW(&amp;H3000), " ")
+    Rc_Norm = Trim$(s)
+End Function
+
+' 値が同じか。数字として読めるものは、数字で比べる(tol 以内の差なら、同じ)
+Private Function Rc_Same(ByVal a As Variant, ByVal b As Variant, ByVal tol As Double) As Boolean
+    Dim sa As String, sb As String
+    sa = Rc_Norm(a)
+    sb = Rc_Norm(b)
+    If sa = sb Then Rc_Same = True: Exit Function
+    If Len(sa) &gt; 0 And Len(sb) &gt; 0 And Len(sa) &lt;= 15 And Len(sb) &lt;= 15 Then
+        If IsNumeric(sa) And IsNumeric(sb) Then
+            Rc_Same = (Abs(CDbl(sa) - CDbl(sb)) &lt;= tol + 0.0000000001)
+        End If
+    End If
+End Function
+
+' キーの文字(大文字小文字は区別しない)。キーがすべて空白なら、blank を True にする
+Private Function Rc_Key(d As Variant, ByVal r As Long, cols() As Long, ByRef blank As Boolean) As String
+    Dim k As Long, s As String, part As String, anyVal As Boolean
+    For k = 1 To UBound(cols)
+        part = Rc_Norm(d(r, cols(k)))
+        If Len(part) &gt; 0 Then anyVal = True
+        s = s &amp; LCase$(part) &amp; Chr(1)
+    Next k
+    blank = Not anyVal
+    Rc_Key = s
+End Function
+
+Private Function Rc_Show(d As Variant, ByVal r As Long, cols() As Long) As String
+    Dim k As Long, s As String
+    For k = 1 To UBound(cols)
+        If k &gt; 1 Then s = s &amp; " / "
+        s = s &amp; Rc_Norm(d(r, cols(k)))
+    Next k
+    Rc_Show = s
+End Function
+
+' 1行ぶんの中身を、「列名=値; 列名=値」の文字にする(長いときは、途中まで)
+Private Function Rc_Desc(d As Variant, ByVal r As Long, hdr() As String, ByVal nc As Long) As String
+    Dim c As Long, s As String, v As String
+    For c = 1 To nc
+        v = Rc_Norm(d(r, c))
+        If Len(v) &gt; 0 Then
+            If Len(s) &gt; 0 Then s = s &amp; "; "
+            s = s &amp; hdr(c) &amp; "=" &amp; v
+        End If
+        If Len(s) &gt; 250 Then s = Left$(s, 250) &amp; "...": Exit For
+    Next c
+    Rc_Desc = s
+End Function
+
+' 結果の文字が、数式として動かないようにする
+Private Function Rc_Safe(ByVal s As String) As String
+    Dim c1 As String
+    If Len(s) = 0 Then Exit Function
+    c1 = Left$(s, 1)
+    If c1 = "=" Or c1 = "+" Or c1 = "@" Or c1 = "-" Then Rc_Safe = "'" &amp; s Else Rc_Safe = s
+End Function
+
+Private Sub Rc_Put(res() As Variant, ByRef cnt As Long, ByVal a As String, ByVal b As String, ByVal c As String, ByVal d As Variant, ByVal e As Variant)
+    cnt = cnt + 1
+    res(cnt, 1) = a
+    res(cnt, 2) = Rc_Safe(b)
+    res(cnt, 3) = Rc_Safe(c)
+    res(cnt, 4) = d
+    res(cnt, 5) = e
+End Sub
+
+Private Function Rc_UniqueSheetName(ByVal baseName As String) As String
+    Dim nm As String, n As Long, ws As Object, hit As Boolean
+    nm = baseName
+    n = 1
+    Do
+        hit = False
+        For Each ws In ActiveWorkbook.Sheets
+            If StrComp(ws.Name, nm, vbTextCompare) = 0 Then hit = True: Exit For
+        Next ws
+        If Not hit Then Exit Do
+        n = n + 1
+        nm = baseName &amp; "(" &amp; n &amp; ")"
+    Loop
+    Rc_UniqueSheetName = nm
+End Function
+
+' ---------------------------------------------------------------
+' ボタン
+' ---------------------------------------------------------------
+Sub Ribbon_Reconcile(control As IRibbonControl)
+    Dim rA As Range, rB As Range, hdr As String, i As Long, keySpec As String, tolS As String
+    Dim tol As Double, ws As Worksheet, msg As String
+    If Workbooks.Count = 0 Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    On Error Resume Next
+    Set rA = Application.InputBox("1つ目の表を、見出しの行も入れて、ドラッグで選んでください。" &amp; vbCrLf &amp; _
+                                  "(別のシートや、別のブックを選んでもかまいません。1つのセルだけ選ぶと、まわりの表全体を使います)", TITLE &amp; " (1/4)", Type:=8)
+    On Error GoTo 0
+    If rA Is Nothing Then Exit Sub
+    If rA.Cells.CountLarge = 1 Then Set rA = rA.CurrentRegion
+    On Error Resume Next
+    Set rB = Application.InputBox("2つ目の表を、見出しの行も入れて、選んでください。", TITLE &amp; " (2/4)", Type:=8)
+    On Error GoTo 0
+    If rB Is Nothing Then Exit Sub
+    If rB.Cells.CountLarge = 1 Then Set rB = rB.CurrentRegion
+    If rA.Areas.Count &gt; 1 Or rB.Areas.Count &gt; 1 Then MsgBox "表は、1つの四角い範囲で選んでください。", vbExclamation, TITLE: Exit Sub
+
+    For i = 1 To rA.Columns.Count
+        If i &gt; 20 Then hdr = hdr &amp; "...": Exit For
+        hdr = hdr &amp; i &amp; "=" &amp; Left$(Rc_Norm(rA.Cells(1, i).Value2), 10) &amp; "  "
+    Next i
+    keySpec = InputBox("照らし合わせるキー(伝票番号、顧客コードなど)の列を、見出しの名前か番号で入れてください。" &amp; vbCrLf &amp; _
+                       "2つ以上は、カンマで区切ります。見出しの名前は、2つの表で同じである必要があります。" &amp; vbCrLf &amp; vbCrLf &amp; _
+                       "1つ目の表の列: " &amp; hdr, TITLE &amp; " (3/4)", Rc_Norm(rA.Cells(1, 1).Value2))
+    If Len(Trim$(keySpec)) = 0 Then Exit Sub
+    tolS = InputBox("数字の差が、いくつ以内なら「同じ」とみなしますか?" &amp; vbCrLf &amp; _
+                    "0 なら、1円の違いも、差として出します。端数の違いを許すなら、1 などを入れます。", TITLE &amp; " (4/4)", "0")
+    If Len(Trim$(tolS)) = 0 Then Exit Sub
+    tolS = StrConv(tolS, vbNarrow)
+    If Not IsNumeric(tolS) Then MsgBox "数字で入れてください。", vbExclamation, TITLE: Exit Sub
+    tol = Abs(CDbl(tolS))
+
+    Set ws = Recon_Do(rA, rB, keySpec, tol, msg)
+    MsgBox msg, IIf(ws Is Nothing, vbExclamation, vbInformation), TITLE
+End Sub
+
+' ---------------------------------------------------------------
+' 本体。成功したら、結果のシートを返す(失敗したら Nothing)。msg に、ユーザーへの報告を入れる
+' ---------------------------------------------------------------
+Private Function Recon_Do(ByVal rA As Range, ByVal rB As Range, ByVal keySpec As String, ByVal tol As Double, ByRef msg As String) As Worksheet
+    Dim dA As Variant, dB As Variant, nA As Long, nB As Long, cA As Long, cB As Long
+    Dim hA() As String, hB() As String, dictHA As Object, dictHB As Object
+    Dim toks() As String, i As Long, c As Long, r As Long, t As String, tn As String, idx As Long
+    Dim nk As Long, kA() As Long, kB() As Long, kName() As String, bad As String
+    Dim pA() As Long, pB() As Long, pName() As String, np As Long, isKey As Boolean, p As Long
+    Dim onlyA As String, onlyB As String, nm As String
+    Dim dictKB As Object, seenA As Object, bState() As Long, usedB() As Boolean
+    Dim k As String, blank As Boolean, br As Long, diffs As String, nd As Long
+    Dim res() As Variant, cnt As Long, cap As Long
+    Dim nSame As Long, nDiff As Long, nOnlyA As Long, nOnlyB As Long, dupA As Long, dupB As Long, emptyA As Long, emptyB As Long
+    Dim ws As Worksheet, last As Long, hd(1 To 1, 1 To 5) As Variant, sm(1 To 12, 1 To 2) As Variant
+    Dim okA As Boolean, okB As Boolean
+
+    On Error GoTo EH
+    If rA.Rows.Count &lt; 2 Or rB.Rows.Count &lt; 2 Then
+        msg = "表は、見出しの行のほかに、データが1行以上必要です。"
+        Exit Function
+    End If
+    ' .Value2 だと、日付が数字(シリアル値)になるので、日付の型が残る .Value で読む
+    dA = rA.Value
+    dB = rB.Value
+    nA = UBound(dA, 1): cA = UBound(dA, 2)
+    nB = UBound(dB, 1): cB = UBound(dB, 2)
+
+    ' 見出し
+    Set dictHA = CreateObject("Scripting.Dictionary"): dictHA.CompareMode = vbTextCompare
+    Set dictHB = CreateObject("Scripting.Dictionary"): dictHB.CompareMode = vbTextCompare
+    ReDim hA(1 To cA): ReDim hB(1 To cB)
+    For c = 1 To cA
+        hA(c) = Rc_Norm(dA(1, c))
+        If Len(hA(c)) &gt; 0 Then If Not dictHA.Exists(hA(c)) Then dictHA.Add hA(c), c
+    Next c
+    For c = 1 To cB
+        hB(c) = Rc_Norm(dB(1, c))
+        If Len(hB(c)) &gt; 0 Then If Not dictHB.Exists(hB(c)) Then dictHB.Add hB(c), c
+    Next c
+
+    ' キーの列
+    keySpec = Replace(Replace(keySpec, "、", ","), "，", ",")
+    toks = Split(keySpec, ",")
+    ReDim kA(1 To UBound(toks) + 1): ReDim kB(1 To UBound(toks) + 1): ReDim kName(1 To UBound(toks) + 1)
+    For i = 0 To UBound(toks)
+        t = Trim$(toks(i))
+        If Len(t) &gt; 0 Then
+            tn = StrConv(t, vbNarrow)
+            If Not dictHA.Exists(t) And IsNumeric(tn) Then
+                idx = CLng(Val(tn))
+                If idx &gt;= 1 And idx &lt;= cA Then t = hA(idx)
+            End If
+            If Len(t) &gt; 0 And dictHA.Exists(t) And dictHB.Exists(t) Then
+                nk = nk + 1
+                kA(nk) = dictHA(t): kB(nk) = dictHB(t): kName(nk) = t
+            Else
+                bad = bad &amp; "「" &amp; t &amp; "」"
+            End If
+        End If
+    Next i
+    If Len(bad) &gt; 0 Or nk = 0 Then
+        msg = "キーの列が見つかりませんでした: " &amp; bad &amp; vbCrLf &amp; "2つの表に、同じ名前の見出しがあるか、確認してください。"
+        Exit Function
+    End If
+    ReDim Preserve kA(1 To nk): ReDim Preserve kB(1 To nk): ReDim Preserve kName(1 To nk)
+
+    ' 比べる列(キー以外で、見出しの名前が同じ列)
+    ReDim pA(1 To cA): ReDim pB(1 To cA): ReDim pName(1 To cA)
+    For c = 1 To cA
+        nm = hA(c)
+        If Len(nm) &gt; 0 Then
+            If dictHA(nm) = c Then
+                isKey = False
+                For i = 1 To nk
+                    If StrComp(kName(i), nm, vbTextCompare) = 0 Then isKey = True
+                Next i
+                If Not isKey Then
+                    If dictHB.Exists(nm) Then
+                        np = np + 1
+                        pA(np) = c: pB(np) = dictHB(nm): pName(np) = nm
+                    Else
+                        onlyA = onlyA &amp; "「" &amp; nm &amp; "」"
+                    End If
+                End If
+            End If
+        End If
+    Next c
+    For c = 1 To cB
+        nm = hB(c)
+        If Len(nm) &gt; 0 Then
+            If dictHB(nm) = c And Not dictHA.Exists(nm) Then onlyB = onlyB &amp; "「" &amp; nm &amp; "」"
+        End If
+    Next c
+
+    ' 表Bのキーを、先に集める
+    Set dictKB = CreateObject("Scripting.Dictionary")
+    Set seenA = CreateObject("Scripting.Dictionary")
+    ReDim bState(2 To nB): ReDim usedB(2 To nB)
+    For r = 2 To nB
+        k = Rc_Key(dB, r, kB, blank)
+        If blank Then
+            bState(r) = 2
+            emptyB = emptyB + 1
+        ElseIf dictKB.Exists(k) Then
+            bState(r) = 1
+            dupB = dupB + 1
+        Else
+            dictKB.Add k, r
+        End If
+    Next r
+
+    cap = (nA - 1) + (nB - 1)
+    ReDim res(1 To cap, 1 To 5)
+
+    ' 表Aを順に見る
+    For r = 2 To nA
+        k = Rc_Key(dA, r, kA, blank)
+        If blank Then
+            emptyA = emptyA + 1
+            Rc_Put res, cnt, "キー空(A)", "(キーが空白)", Rc_Desc(dA, r, hA, cA), rA.Row + r - 1, ""
+        ElseIf seenA.Exists(k) Then
+            dupA = dupA + 1
+            Rc_Put res, cnt, "重複(A)", Rc_Show(dA, r, kA), "同じキーが、" &amp; (rA.Row + seenA(k) - 1) &amp; "行目にもあります", rA.Row + r - 1, ""
+        Else
+            seenA.Add k, r
+            If dictKB.Exists(k) Then
+                br = dictKB(k)
+                usedB(br) = True
+                diffs = ""
+                nd = 0
+                For p = 1 To np
+                    If Not Rc_Same(dA(r, pA(p)), dB(br, pB(p)), tol) Then
+                        nd = nd + 1
+                        If nd &gt; 1 Then diffs = diffs &amp; "; "
+                        diffs = diffs &amp; pName(p) &amp; ": " &amp; Rc_Norm(dA(r, pA(p))) &amp; " → " &amp; Rc_Norm(dB(br, pB(p)))
+                    End If
+                Next p
+                If nd = 0 Then
+                    nSame = nSame + 1
+                Else
+                    nDiff = nDiff + 1
+                    Rc_Put res, cnt, "差異", Rc_Show(dA, r, kA), diffs, rA.Row + r - 1, rB.Row + br - 1
+                End If
+            Else
+                nOnlyA = nOnlyA + 1
+                Rc_Put res, cnt, "Aのみ", Rc_Show(dA, r, kA), Rc_Desc(dA, r, hA, cA), rA.Row + r - 1, ""
+            End If
+        End If
+    Next r
+
+    ' 表Bの、残り
+    For r = 2 To nB
+        Select Case bState(r)
+            Case 2
+                Rc_Put res, cnt, "キー空(B)", "(キーが空白)", Rc_Desc(dB, r, hB, cB), "", rB.Row + r - 1
+            Case 1
+                k = Rc_Key(dB, r, kB, blank)
+                Rc_Put res, cnt, "重複(B)", Rc_Show(dB, r, kB), "同じキーが、" &amp; (rB.Row + dictKB(k) - 1) &amp; "行目にもあります", "", rB.Row + r - 1
+            Case Else
+                If Not usedB(r) Then
+                    nOnlyB = nOnlyB + 1
+                    Rc_Put res, cnt, "Bのみ", Rc_Show(dB, r, kB), Rc_Desc(dB, r, hB, cB), "", rB.Row + r - 1
+                End If
+        End Select
+    Next r
+
+    ' 検算
+    okA = ((nA - 1) = nSame + nDiff + nOnlyA + dupA + emptyA)
+    okB = ((nB - 1) = nSame + nDiff + nOnlyB + dupB + emptyB)
+
+    ' 結果のシート
+    Application.ScreenUpdating = False
+    Set ws = ActiveWorkbook.Worksheets.Add(After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count))
+    ws.Name = Rc_UniqueSheetName("突合結果")
+    hd(1, 1) = "結果"
+    hd(1, 2) = "キー(" &amp; Join(kName, " / ") &amp; ")"
+    hd(1, 3) = "内容"
+    hd(1, 4) = "Aの行"
+    hd(1, 5) = "Bの行"
+    ws.Range("A1:E1").Value2 = hd
+    last = cnt + 1
+    If cnt &gt; 0 Then
+        ws.Range("A2").Resize(cap, 5).Value2 = res
+    Else
+        ws.Range("A2").Value2 = "(すべて一致しました)"
+        last = 2
+    End If
+    sm(1, 1) = "表Aの行数(見出し除く)": sm(1, 2) = nA - 1
+    sm(2, 1) = "表Bの行数(見出し除く)": sm(2, 2) = nB - 1
+    sm(3, 1) = "一致": sm(3, 2) = nSame
+    sm(4, 1) = "差異": sm(4, 2) = nDiff
+    sm(5, 1) = "Aのみ": sm(5, 2) = nOnlyA
+    sm(6, 1) = "Bのみ": sm(6, 2) = nOnlyB
+    sm(7, 1) = "重複(A)": sm(7, 2) = dupA
+    sm(8, 1) = "重複(B)": sm(8, 2) = dupB
+    sm(9, 1) = "キー空(A)": sm(9, 2) = emptyA
+    sm(10, 1) = "キー空(B)": sm(10, 2) = emptyB
+    sm(11, 1) = "検算(A)": sm(11, 2) = IIf(okA, "OK", "不一致")
+    sm(12, 1) = "検算(B)": sm(12, 2) = IIf(okB, "OK", "不一致")
+    ws.Range("G1:H12").Value2 = sm
+    ws.Range("A1:E1").Font.Bold = True
+    ws.Range("A1:E1").Interior.Color = RGB(217, 217, 217)
+    ws.Range("G1:G12").Font.Bold = True
+    With ws.Range("A2:E" &amp; last).FormatConditions
+        .Delete
+        .Add(2, , "=$A2=""差異""").Interior.Color = RGB(252, 228, 214)
+        .Add(2, , "=$A2=""Aのみ""").Interior.Color = RGB(255, 242, 204)
+        .Add(2, , "=$A2=""Bのみ""").Interior.Color = RGB(221, 235, 247)
+        .Add(2, , "=LEFT($A2,2)=""重複""").Interior.Color = RGB(237, 237, 237)
+        .Add(2, , "=LEFT($A2,2)=""キー""").Interior.Color = RGB(237, 237, 237)
+    End With
+    ws.Columns("A:H").AutoFit
+    If ws.Columns(3).ColumnWidth &gt; 70 Then ws.Columns(3).ColumnWidth = 70
+    On Error Resume Next
+    ws.Range("A1:E" &amp; last).AutoFilter
+    ws.Activate
+    ActiveWindow.SplitColumn = 0
+    ActiveWindow.SplitRow = 1
+    ActiveWindow.FreezePanes = True
+    ws.Range("A1").Select
+    On Error GoTo EH
+    Application.ScreenUpdating = True
+
+    msg = "突合しました。新しいシート「" &amp; ws.Name &amp; "」を見てください。" &amp; vbCrLf &amp; vbCrLf &amp; _
+          "表A " &amp; (nA - 1) &amp; " 行 / 表B " &amp; (nB - 1) &amp; " 行 / キー: " &amp; Join(kName, " + ") &amp; vbCrLf &amp; _
+          "一致 " &amp; nSame &amp; " / 差異 " &amp; nDiff &amp; " / Aのみ " &amp; nOnlyA &amp; " / Bのみ " &amp; nOnlyB &amp; vbCrLf &amp; _
+          "重複 A " &amp; dupA &amp; ", B " &amp; dupB &amp; " / キー空白 A " &amp; emptyA &amp; ", B " &amp; emptyB &amp; vbCrLf
+    msg = msg &amp; "検算: " &amp; IIf(okA And okB, "行数がすべて合いました。", "行数が合いません。結果を確認してください。")
+    If np = 0 Then msg = msg &amp; vbCrLf &amp; "※ 比べる列がありません(キーの有無だけ見ました)。"
+    If Len(onlyA) &gt; 0 Then msg = msg &amp; vbCrLf &amp; "※ Aにしかない列(比べていません): " &amp; onlyA
+    If Len(onlyB) &gt; 0 Then msg = msg &amp; vbCrLf &amp; "※ Bにしかない列(比べていません): " &amp; onlyB
+    If tol &gt; 0 Then msg = msg &amp; vbCrLf &amp; "※ 数字の差が " &amp; tol &amp; " 以内は、同じとしました。"
+    Set Recon_Do = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" &amp; vbCrLf &amp; Err.Description
+    If Not ws Is Nothing Then
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+    End If
+End Function</pre></details>
+  <details><summary>BasicTools(143行)</summary><pre class="code">Attribute VB_Name = "BasicTools"
+Option Explicit
+
+' 便利ツール 基本機能(A1に戻して保存 / 空白行の削除 / ブック全体のPDF出力)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。ネットへの送信は、しない。
+' BT_ で始まる関数は、画面(確認の表示)を出さずに、処理だけを行う。
+
+Private Const TITLE As String = "便利ツール"
+Private mLastErr As String
+
+Private Function BT_Ask(ByVal msg As String) As Boolean
+    BT_Ask = (MsgBox(msg, vbYesNo + vbQuestion + vbDefaultButton2, TITLE) = vbYes)
+End Function
+
+' ---- 1. 全シートのカーソルを A1 に戻して、保存する ----
+' 全シートのカーソルを A1 に戻す。処理できなかったシートの数を返す(保存は、しない)
+Public Function BT_MoveToA1(ByVal wb As Workbook) As Long
+    Dim ws As Object, firstWs As Object, skipped As Long
+    On Error Resume Next
+    wb.Activate
+    On Error GoTo 0
+    For Each ws In wb.Sheets
+        If ws.Visible = xlSheetVisible Then
+            If firstWs Is Nothing Then Set firstWs = ws
+            On Error Resume Next
+            Err.Clear
+            ws.Activate
+            If TypeName(ws) = "Worksheet" Then
+                ActiveWindow.ScrollRow = 1
+                ActiveWindow.ScrollColumn = 1
+                ws.Range("A1").Select
+            End If
+            If Err.Number &lt;&gt; 0 Then skipped = skipped + 1
+            On Error GoTo 0
+        End If
+    Next ws
+    If Not firstWs Is Nothing Then
+        On Error Resume Next
+        firstWs.Activate
+        On Error GoTo 0
+    End If
+    BT_MoveToA1 = skipped
+End Function
+
+Sub Ribbon_AutoSaveA1(control As IRibbonControl)
+    Dim wb As Workbook, n As Long
+    If ActiveWorkbook Is Nothing Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set wb = ActiveWorkbook
+    If wb.Path = "" Then MsgBox "このブックは、まだ一度も保存されていません。先に、名前を付けて保存してください。", vbExclamation, TITLE: Exit Sub
+    If wb.ReadOnly Then MsgBox "このブックは、読み取り専用です。保存できません。", vbExclamation, TITLE: Exit Sub
+    If Not BT_Ask("全シートのカーソルを A1 に戻して、ブックを上書き保存します。" &amp; vbCrLf &amp; vbCrLf &amp; "よろしいですか?") Then Exit Sub
+    On Error GoTo EH
+    n = BT_MoveToA1(wb)
+    wb.Save
+    MsgBox "全シートのカーソルを A1 に戻して、保存しました。" &amp; IIf(n &gt; 0, vbCrLf &amp; "(処理できなかったシート: " &amp; n &amp; ")", ""), vbInformation, TITLE
+    Exit Sub
+EH:
+    MsgBox "保存できませんでした。(" &amp; Err.Description &amp; ")", vbExclamation, TITLE
+End Sub
+
+' ---- 2. 空白行の削除 ----
+' データの中にある、すべてのセルが空の行を、下から削除する。削除した行数を返す
+' (数式が入っている行は、空白とみなさない。データより上の空行は、触らない)
+Public Function BT_DeleteBlankRows(ByVal ws As Worksheet) As Long
+    Dim ur As Range, r As Long, firstRow As Long, lastRow As Long, c1 As Long, c2 As Long, cnt As Long
+    If Application.WorksheetFunction.CountA(ws.UsedRange) = 0 Then Exit Function
+    Set ur = ws.UsedRange
+    firstRow = ur.Row
+    lastRow = ur.Row + ur.Rows.Count - 1
+    c1 = ur.Column
+    c2 = ur.Column + ur.Columns.Count - 1
+    For r = lastRow To firstRow Step -1
+        If Application.WorksheetFunction.CountA(ws.Range(ws.Cells(r, c1), ws.Cells(r, c2))) = 0 Then
+            ws.Rows(r).Delete
+            cnt = cnt + 1
+        End If
+    Next r
+    BT_DeleteBlankRows = cnt
+End Function
+
+Sub Ribbon_DeleteBlankRows(control As IRibbonControl)
+    Dim ws As Object, n As Long
+    If ActiveWorkbook Is Nothing Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ws = ActiveSheet
+    If TypeName(ws) &lt;&gt; "Worksheet" Then MsgBox "ワークシートを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    If ws.ProtectContents Then MsgBox "このシートは、保護されています。保護を解除してから、押してください。", vbExclamation, TITLE: Exit Sub
+    If Not BT_Ask("シート「" &amp; ws.Name &amp; "」の、データの中にある空白の行(すべてのセルが空の行)を、削除します。" &amp; vbCrLf &amp; _
+                  "数式が入っている行は、空白とみなしません。" &amp; vbCrLf &amp; vbCrLf &amp; _
+                  "※ 元に戻せません。心配なら、先に、ファイルのコピーを取ってください。" &amp; vbCrLf &amp; vbCrLf &amp; _
+                  "よろしいですか?") Then Exit Sub
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    n = BT_DeleteBlankRows(ws)
+    Application.ScreenUpdating = True
+    If n = 0 Then
+        MsgBox "空白の行は、ありませんでした。", vbInformation, TITLE
+    Else
+        MsgBox n &amp; " 行の空白行を、削除しました。", vbInformation, TITLE
+    End If
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "削除できませんでした。(" &amp; Err.Description &amp; ")", vbExclamation, TITLE
+End Sub
+
+' ---- 3. ブック全体を、1つの PDF にする ----
+' 成功したら True を返す。失敗の理由は、mLastErr に残す
+Public Function BT_ExportPdf(ByVal wb As Workbook, ByVal path As String) As Boolean
+    On Error GoTo EH
+    mLastErr = ""
+    wb.ExportAsFixedFormat Type:=xlTypePDF, Filename:=path, Quality:=xlQualityStandard, _
+        IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False
+    BT_ExportPdf = True
+    Exit Function
+EH:
+    mLastErr = Err.Description
+    BT_ExportPdf = False
+End Function
+
+Sub Ribbon_ExportAllToPDF(control As IRibbonControl)
+    Dim wb As Workbook, base As String, init As String, f As Variant, p As String
+    If ActiveWorkbook Is Nothing Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set wb = ActiveWorkbook
+    base = wb.Name
+    If InStrRev(base, ".") &gt; 0 Then base = Left$(base, InStrRev(base, ".") - 1)
+    init = base &amp; ".pdf"
+    If wb.Path &lt;&gt; "" And LCase$(Left$(wb.Path, 4)) &lt;&gt; "http" Then init = wb.Path &amp; Application.PathSeparator &amp; init
+    f = Application.GetSaveAsFilename(InitialFileName:=init, FileFilter:="PDFファイル (*.pdf),*.pdf", Title:="PDFの保存先")
+    If VarType(f) = vbBoolean Then Exit Sub
+    p = CStr(f)
+    If LCase$(Right$(p, 4)) &lt;&gt; ".pdf" Then p = p &amp; ".pdf"
+    If Dir(p) &lt;&gt; "" Then
+        If Not BT_Ask("同じ名前のファイルが、すでにあります。上書きしますか?" &amp; vbCrLf &amp; p) Then Exit Sub
+    End If
+    Application.StatusBar = "PDFを作成しています..."
+    If BT_ExportPdf(wb, p) Then
+        Application.StatusBar = False
+        MsgBox "ブック全体を、PDFにしました。" &amp; vbCrLf &amp; p, vbInformation, TITLE
+    Else
+        Application.StatusBar = False
+        MsgBox "PDFを作成できませんでした。(" &amp; mLastErr &amp; ")" &amp; vbCrLf &amp; "(印刷する内容のあるシートが、ないブックでは、作成できないことがあります)", vbExclamation, TITLE
+    End If
+End Sub</pre></details>
+  <details><summary>install.vbs(91行)</summary><pre class="code">Option Explicit
+
+Dim fso, shell, appDataPath, targetFolder
+Dim scriptDir, xlamSrc, jsonSrc, xlamDst, jsonDst
+Dim excelApp, addinObj, addinName
+
+' オブジェクトの初期化
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set shell = CreateObject("WScript.Shell")
+
+' 実行中のスクリプトが存在するフォルダパスを取得
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+
+' 転送元ファイルのパス
+xlamSrc = fso.BuildPath(scriptDir, "CustomAddin.xlam")
+jsonSrc = fso.BuildPath(scriptDir, "config.json")
+
+' 転送先の Excel アドイン標準フォルダ (%AppData%\Microsoft\AddIns)
+appDataPath = shell.ExpandEnvironmentStrings("%APPDATA%")
+targetFolder = fso.BuildPath(appDataPath, "Microsoft\AddIns")
+
+' アドインフォルダが存在しない場合は作成
+If Not fso.FolderExists(targetFolder) Then
+    fso.CreateFolder(targetFolder)
+End If
+
+' 転送先ファイルのパス
+xlamDst = fso.BuildPath(targetFolder, "CustomAddin.xlam")
+jsonDst = fso.BuildPath(targetFolder, "config.json")
+
+' 1. ファイルのコピー処理
+On Error Resume Next
+If fso.FileExists(xlamSrc) Then
+    fso.CopyFile xlamSrc, xlamDst, True
+    If Err.Number &lt;&gt; 0 Then
+        MsgBox "アドインのコピーに失敗しました。" &amp; vbCrLf &amp; "Excel をすべて閉じてから、もう一度、実行してください。" &amp; vbCrLf &amp; "(" &amp; Err.Description &amp; ")", vbExclamation, "ご注意"
+        WScript.Quit
+    End If
+Else
+    MsgBox "CustomAddin.xlam が見つかりません。" &amp; vbCrLf &amp; "同一フォルダにファイルが存在するか確認してください。", vbCritical, "エラー"
+    WScript.Quit
+End If
+
+If fso.FileExists(jsonSrc) Then
+    fso.CopyFile jsonSrc, jsonDst, True
+End If
+On Error GoTo 0
+
+' 1-b. ダウンロードの印(Mark of the Web)を外す。外さないと、Excel がマクロを止める
+UnblockFile xlamDst
+If fso.FileExists(jsonDst) Then UnblockFile jsonDst
+
+' 2. Excel へのアドイン登録＆有効化処理
+On Error Resume Next
+Set excelApp = CreateObject("Excel.Application")
+excelApp.Visible = False
+
+If Err.Number = 0 Then
+    ' 既存のアドインから同名ものを取得、なければ新規追加
+    Dim item, targetAddin
+    For Each item In excelApp.AddIns
+        If UCase(item.Name) = "CUSTOMADDIN.XLAM" Then
+            Set targetAddin = item
+            Exit For
+        End If
+    Next
+
+    If targetAddin Is Nothing Then
+        Set targetAddin = excelApp.AddIns.Add(xlamDst, True)
+    End If
+
+    ' 強制的に有効化
+    targetAddin.Installed = True
+    
+    excelApp.Quit
+    Set excelApp = Nothing
+    
+    MsgBox "Excel アドインのインストールと有効化が完了しました！" &amp; vbCrLf &amp; vbCrLf &amp; _
+           "配置先: " &amp; targetFolder &amp; vbCrLf &amp; vbCrLf &amp; _
+           "Excel を開いて、「便利ツール」タブを見てください。出ないときは、「はじめにお読みください」を見てください。", vbInformation, "インストール完了"
+Else
+    MsgBox "Excel の自動操作に失敗しました。Excelを完全に閉じた状態で再試行してください。", vbExclamation, "ご注意"
+End If
+On Error GoTo 0
+
+' ファイルの「ダウンロードの印」を外す(PowerShell の Unblock-File を使う。Microsoft の手順と同じ処理)
+Sub UnblockFile(path)
+    On Error Resume Next
+    shell.Run "powershell.exe -NoProfile -Command ""Unblock-File -LiteralPath '" &amp; Replace(path, "'", "''") &amp; "'""", 0, True
+    On Error GoTo 0
+End Sub</pre></details>
+  <details><summary>uninstall.vbs(47行)</summary><pre class="code">Option Explicit
+
+Dim fso, shell, targetFolder, xlamDst, jsonDst, excelApp, item, ans, failed
+
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set shell = CreateObject("WScript.Shell")
+
+targetFolder = fso.BuildPath(shell.ExpandEnvironmentStrings("%APPDATA%"), "Microsoft\AddIns")
+xlamDst = fso.BuildPath(targetFolder, "CustomAddin.xlam")
+jsonDst = fso.BuildPath(targetFolder, "config.json")
+
+ans = MsgBox("Excel の「便利ツール」アドインを、削除します。" &amp; vbCrLf &amp; vbCrLf &amp; _
+             "削除するファイル: " &amp; xlamDst &amp; vbCrLf &amp; _
+             "(あなたの Excel ファイルには、触りません)" &amp; vbCrLf &amp; vbCrLf &amp; _
+             "Excel を開いている場合は、先にすべて閉じてください。続けますか?", _
+             vbYesNo + vbQuestion + vbDefaultButton2, "アンインストール")
+If ans &lt;&gt; vbYes Then WScript.Quit
+
+' 1. Excel のアドイン登録を外す
+On Error Resume Next
+Set excelApp = CreateObject("Excel.Application")
+If Err.Number = 0 Then
+    excelApp.Visible = False
+    For Each item In excelApp.AddIns
+        If UCase(item.Name) = "CUSTOMADDIN.XLAM" Then item.Installed = False
+    Next
+    excelApp.Quit
+    Set excelApp = Nothing
+End If
+Err.Clear
+
+' 2. ファイルを削除
+failed = False
+If fso.FileExists(xlamDst) Then
+    fso.DeleteFile xlamDst, True
+    If Err.Number &lt;&gt; 0 Then failed = True
+End If
+Err.Clear
+If fso.FileExists(jsonDst) Then fso.DeleteFile jsonDst, True
+Err.Clear
+On Error GoTo 0
+
+If failed Then
+    MsgBox "ファイルを削除できませんでした。Excel をすべて閉じてから、もう一度、実行してください。", vbExclamation, "ご注意"
+Else
+    MsgBox "アンインストールが完了しました。Excel を開き直すと、「便利ツール」タブは消えています。", vbInformation, "アンインストール完了"
+End If</pre></details>
+</div></main>
+
+<footer class="site"><div class="wrap">
+  <a href="privacy.html">プライバシーポリシー・免責</a> ・ <a href="faq.html">よくある質問</a><br>
+  © Excel時短ラボ
+
+  <p class="small" style="margin:10px 0 0;max-width:42em">注記: このサイトの文章と、アドインのコードは、AI(Anthropic社の「Claude」)の支援を受けて作成しています。AIの出力には、誤りが含まれることがあります。気になる点は、公開しているコードで、ご確認ください。</p>
+</div></footer>
+</body>
+</html>

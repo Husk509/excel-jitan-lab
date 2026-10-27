@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>導入の手順|Excel時短ラボ</title>
+<meta name="description" content="便利ツールアドインの、ダウンロードからインストール、アンインストールまでの手順。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">本文へ移動</a>
+<header class="site"><div class="wrap">
+  <a class="brand" href="index.html">Excel時短ラボ</a>
+  <nav class="site" aria-label="メニュー">
+    <a href="index.html">トップ</a><a href="features.html">機能</a><a href="install.html" aria-current="page">導入</a><a href="code.html">中身を確認</a><a href="faq.html">よくある質問</a><a href="contact.html">お問い合わせ</a>
+  </nav>
+</div></header>
+
+<main id="main"><div class="wrap">
+  <h1>導入の手順</h1>
+  <p class="lead">所要時間は、約1分です。Windows版のExcel用です(Macとブラウザ版のExcelでは動きません)。</p>
+  <p><a class="btn" href="downloads/CustomAddin_Installer.zip" download>ダウンロード(インストーラーZIP)</a></p>
+
+  <h2>手順1: ZIPの「ブロック」を解除する(いちばん大切です)</h2>
+  <p>インターネットからダウンロードしたファイルには、Windowsが「ネット由来の印」を付けます。印が付いたままだと、Excelはマクロを動かしません(ボタンが出ない、または押しても動かない)。<b>展開する前に</b>、ZIPの印を外します。</p>
+  <ol class="steps">
+    <li>ダウンロードした「CustomAddin_Installer.zip」を、右クリックします。</li>
+    <li>「プロパティ」を選びます。</li>
+    <li>「全般」タブの右下にある、「セキュリティ」の欄の「許可する」に、チェックを入れます(古いWindowsでは、「ブロックの解除」と表示されます)。</li>
+    <li>「OK」を押します。</li>
+    <li>ZIPを展開(解凍)します。</li>
+  </ol>
+  <figure class="shot"><a href="images/step1-menu.png" target="_blank" rel="noopener"><img src="images/step1-menu.png" width="1085" height="1040" alt="ZIPを右クリックしたメニュー。下のほうに、プロパティがあります" style="max-width:min(100%,560px);height:auto;border:1px solid var(--line);border-radius:8px"></a><figcaption>図: ZIPを右クリックしたメニュー(Windows 11)。「プロパティ」を選びます。</figcaption></figure>
+  <figure class="shot"><a href="images/step1-properties.png" target="_blank" rel="noopener"><img src="images/step1-properties.png" width="801" height="1135" alt="ZIPのプロパティ画面。右下のセキュリティの欄に、許可するのチェック欄があります" style="max-width:min(100%,460px);height:auto;border:1px solid var(--line);border-radius:8px"></a><figcaption>図: ZIPの「プロパティ」画面(Windows 11)。右下の「セキュリティ」の欄にある「許可する(K)」に、チェックを入れて、「OK」を押します。</figcaption></figure>
+  <p class="note">「許可する」の欄が見当たらないときは、すでに外れているか、ブロックされていません。次へ進んでください。</p>
+
+  <h2>手順2: インストールする</h2>
+  <ol class="steps">
+    <li>Excelを、すべて閉じます。</li>
+    <li>展開したフォルダの中の「install.vbs」を、ダブルクリックします(「このファイルを開きますか?」と出たら、「開く」を選びます)。</li>
+    <li>「インストールと有効化が完了しました」と出れば、成功です。</li>
+    <li>Excelを開きます。リボンに「便利ツール」というタブが出ています。</li>
+  </ol>
+  <figure class="shot"><div class="scrollx"><img src="images/step2-folder.png" width="1085" height="270" alt="展開したフォルダの中身。CustomAddin、install、uninstall、はじめにお読みください、の4つが並んでいます" style="width:100%;height:auto;border:1px solid var(--line);border-radius:8px"></div><figcaption>図: 展開したフォルダの中身。「install」(種類が「VBScript Script ファイル」のもの)を、ダブルクリックします。拡張子(.vbs)が表示されない設定のときは、「install」とだけ表示されます。</figcaption></figure>
+  <figure class="shot"><a href="images/step2-done.png" target="_blank" rel="noopener"><img src="images/step2-done.png" width="712" height="369" alt="インストール完了のメッセージ。Excel アドインのインストールと有効化が完了しました、と表示されています" style="max-width:min(100%,520px);height:auto;border:1px solid var(--line);border-radius:8px"></a><figcaption>図: 成功したときの、完了メッセージ。「配置先」には、お使いのパソコンの場所が表示されます。「OK」を押して、Excelを開いてください。</figcaption></figure>
+  <figure class="shot"><div class="scrollx"><img src="images/step3-ribbon.png" width="1992" height="214" alt="Excelのリボンに増えた「便利ツール」タブ。マクロ機能、データ整理、シート・書式、CSV、突合のボタンが並んでいます" style="width:100%;height:auto;border:1px solid var(--line);border-radius:10px"></div><figcaption>図: Excelを開いたときの、リボンの表示。「便利ツール」タブが増えます。</figcaption></figure>
+  <div class="ok">
+    <b>install.vbs がやることは、次の3つだけです。</b>
+    <ul>
+      <li>CustomAddin.xlam を、<code>%AppData%\Microsoft\AddIns</code> へコピーする</li>
+      <li>ダウンロードの印を外す</li>
+      <li>Excelに、アドインとして登録する</li>
+    </ul>
+    インターネットへの通信や、あなたのブックの読み書きは、しません。install.vbs の中身は、<a href="code.html">「中身を確認」のページ</a>で、読めます。
+  </div>
+
+  <h2>うまくいかないとき</h2>
+  <h3>「便利ツール」タブが出ない</h3>
+  <ul>
+    <li>Excelを、いったんすべて閉じて、もう一度開いてください。</li>
+    <li>Excelの「ファイル」→「オプション」→「アドイン」を開きます。下の「管理」で「Excelアドイン」を選び、「設定」を押します。「CustomAddin」にチェックが入っているか、確認してください。</li>
+    <li>黄色い帯や赤い帯で「セキュリティ リスク」と出ている場合は、ブロックが残っています。次の項目の手順で、印を外してください。</li>
+  </ul>
+  <h3>ボタンを押しても、何も起きない/「マクロが無効」と出る</h3>
+  <ol class="steps">
+    <li>エクスプローラーのアドレス欄に、<code>%AppData%\Microsoft\AddIns</code> と入れて、開きます。</li>
+    <li>「CustomAddin.xlam」を右クリック →「プロパティ」。</li>
+    <li>「許可する」にチェック →「OK」。</li>
+    <li>Excelを、すべて閉じて、開き直します。</li>
+  </ol>
+  <h3>install.vbs が動かない/エラーが出る</h3>
+  <ul>
+    <li>Excelが1つでも開いていると、失敗することがあります。すべて閉じてから、もう一度試してください。</li>
+    <li>会社や学校のパソコンでは、管理者の設定で、スクリプトの実行やアドインの追加が、禁止されていることがあります。その場合は、管理者にご相談ください。</li>
+  </ul>
+
+  <h2>アドイン本体だけを使う場合</h2>
+  <p>インストーラーを使わず、「CustomAddin.xlam」だけを入れることもできます。<a href="downloads/CustomAddin.xlam" download>CustomAddin.xlam をダウンロード</a>したあと、上と同じ「許可する」のチェックをして、<code>%AppData%\Microsoft\AddIns</code> に置き、Excelの「ファイル」→「オプション」→「アドイン」→「設定」で、「CustomAddin」にチェックを入れます。</p>
+
+  <h2>アンインストール(削除)</h2>
+  <p><b>方法A:</b> 「uninstall.vbs」をダブルクリックします(Excelは、すべて閉じてから)。アドインの登録を外して、ファイルを削除します。あなたのExcelファイルには、触りません。</p>
+  <p><b>方法B(手で行う場合):</b> Excelの「ファイル」→「オプション」→「アドイン」→「管理」で「Excelアドイン」→「設定」。「CustomAddin」のチェックを外して「OK」。そのあと、<code>%AppData%\Microsoft\AddIns</code> の「CustomAddin.xlam」を、ごみ箱に入れます。</p>
+</div></main>
+
+<footer class="site"><div class="wrap">
+  <a href="privacy.html">プライバシーポリシー・免責</a> ・ <a href="faq.html">よくある質問</a><br>
+  © Excel時短ラボ
+
+  <p class="small" style="margin:10px 0 0;max-width:42em">注記: このサイトの文章と、アドインのコードは、AI(Anthropic社の「Claude」)の支援を受けて作成しています。AIの出力には、誤りが含まれることがあります。気になる点は、公開しているコードで、ご確認ください。</p>
+</div></footer>
+</body>
+</html>

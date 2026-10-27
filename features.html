@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>機能の一覧|Excel時短ラボ</title>
+<meta name="description" content="便利ツールアドインの機能一覧。CSV結合、表の突合、重複削除、書式の統一など。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">本文へ移動</a>
+<header class="site"><div class="wrap">
+  <a class="brand" href="index.html">Excel時短ラボ</a>
+  <nav class="site" aria-label="メニュー">
+    <a href="index.html">トップ</a><a href="features.html" aria-current="page">機能</a><a href="install.html">導入</a><a href="code.html">中身を確認</a><a href="faq.html">よくある質問</a><a href="contact.html">お問い合わせ</a>
+  </nav>
+</div></header>
+
+<main id="main"><div class="wrap">
+  <h1>機能の一覧</h1>
+  <p class="lead">どれも、Excelの「便利ツール」タブのボタンを押すだけです。</p>
+  <p class="note">行の削除、数式を値に、重複の削除など、<b>元に戻せない操作</b>があります。多くのボタンは、実行の前に確認が出ます。大事なファイルは、先にコピーを取ってから、お使いください。</p>
+
+  <ul class="toc" aria-label="ページ内の移動"><li><a href="#f1">マクロ機能</a></li><li><a href="#f2">CSV</a></li><li><a href="#f3">突合</a></li><li><a href="#f4">データ整理</a></li><li><a href="#f5">シート・書式</a></li></ul>
+  <h2 id="f1">マクロ機能</h2>
+  <table>
+    <tr><th>A1移動&amp;保存</th><td>全シートのカーソルを、A1に戻して、開いているブックを上書き保存します。実行の前に、確認が出ます。</td></tr>
+    <tr><th>空白行削除</th><td>開いているシートの、データの中にある空白の行(すべてのセルが空の行)を、まとめて削除します。数式が入っている行は、空白とみなしません。元に戻せないので、実行の前に確認が出ます。</td></tr>
+    <tr><th>PDF一括出力</th><td>ブック全体を、1つのPDFにします。保存先と名前は、画面で選べます。</td></tr>
+  </table>
+
+  <h2 id="f2">CSV</h2>
+  <table>
+    <tr><th>CSVを結合・読込</th><td>複数のCSVを、1つのシートにまとめます。見出しの名前で列をそろえるので、列の並びが違っても大丈夫です。文字コード(Shift-JIS / UTF-8)は、自動で見分けます。結果は新しいシートに出て、元のCSVは変わりません。</td></tr>
+    <tr><th>列の並べ替え</th><td>列の順番を入れ替えたり、いらない列を除いたりして、新しいシートに出します。</td></tr>
+    <tr><th>CSVで保存</th><td>開いているシートを、CSVで保存します。Shift-JISかUTF-8を選べます。</td></tr>
+  </table>
+
+  <h2 id="f3">突合</h2>
+  <table>
+    <tr><th>表の突合</th><td>2つの表を、キーの列で照らし合わせて、「値が違う」「片方にしかない」「重複」を一覧にします。結果は新しいシートに、色つきで出ます。元の表は変わりません。「数字の差が、いくつ以内なら同じとするか」を、指定できます。</td></tr>
+  </table>
+
+  <h2 id="f4">データ整理</h2>
+  <table>
+    <tr><th>重複行の削除</th><td>選んだ範囲で、全部の列が同じ行を、1行だけ残します。</td></tr>
+    <tr><th>数式を値に</th><td>選んだ範囲の数式を、計算結果の値にします。</td></tr>
+    <tr><th>空白を強調</th><td>空白のセルを、黄色で目立たせます(解除もできます)。</td></tr>
+  </table>
+
+  <h2 id="f5">シート・書式</h2>
+  <table>
+    <tr><th>見出し固定&amp;列幅</th><td>1行目を固定して、列幅を内容に合わせます。</td></tr>
+    <tr><th>書式の統一</th><td>フォント・罫線・見出しの書式をそろえます。</td></tr>
+    <tr><th>シート複製(連番)</th><td>開いているシートを、連番の名前で複製します。</td></tr>
+    <tr><th>シート名に日付</th><td>全シート名の先頭に、今日の日付(yyyymmdd_)を付けます。</td></tr>
+  </table>
+
+  <p style="margin-top:28px"><a class="btn" href="install.html">導入の手順へ</a><a class="btn sub" href="code.html">コードを見る</a></p>
+</div></main>
+
+<footer class="site"><div class="wrap">
+  <a href="privacy.html">プライバシーポリシー・免責</a> ・ <a href="faq.html">よくある質問</a><br>
+  © Excel時短ラボ
+
+  <p class="small" style="margin:10px 0 0;max-width:42em">注記: このサイトの文章と、アドインのコードは、AI(Anthropic社の「Claude」)の支援を受けて作成しています。AIの出力には、誤りが含まれることがあります。気になる点は、公開しているコードで、ご確認ください。</p>
+</div></footer>
+</body>
+</html>
