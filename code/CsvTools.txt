@@ -1,0 +1,620 @@
+Attribute VB_Name = "CsvTools"
+Option Explicit
+
+' CSVツール(CSVの結合・読み込み / 列の並べ替え / CSVで保存)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。
+' 読み込んだCSVは書き換えない。結果は、新しいシートに出す。ファイルの削除や、ネットへの送信は、しない。
+Private Const TITLE As String = "CSVツール"
+Private Const MAX_ROWS As Long = 1048576
+
+' ---------------------------------------------------------------
+' 共通: CSVの読み込み
+' ---------------------------------------------------------------
+Private Function Csv_IsUtf8(b() As Byte, ByRef hasHigh As Boolean) As Boolean
+    Dim i As Long, n As Long, c As Long, k As Long, j As Long
+    n = UBound(b)
+    i = 0
+    Do While i <= n
+        c = b(i)
+        If c < &H80 Then
+            i = i + 1
+        Else
+            hasHigh = True
+            If c >= &HC2 And c <= &HDF Then
+                k = 1
+            ElseIf c >= &HE0 And c <= &HEF Then
+                k = 2
+            ElseIf c >= &HF0 And c <= &HF4 Then
+                k = 3
+            Else
+                Exit Function
+            End If
+            If i + k > n Then Exit Function
+            For j = 1 To k
+                If (b(i + j) And &HC0) <> &H80 Then Exit Function
+            Next j
+            i = i + k + 1
+        End If
+    Loop
+    Csv_IsUtf8 = True
+End Function
+
+' 文字コードを自動で見分けて(UTF-8 / Shift-JIS / UTF-16)、全体を文字列で返す
+Private Function Csv_ReadText(ByVal path As String, ByRef encName As String) As String
+    Dim st As Object, b() As Byte, cs As String, hasHigh As Boolean, s As String
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 1
+    st.Open
+    st.LoadFromFile path
+    If st.Size = 0 Then
+        st.Close
+        encName = "空のファイル"
+        Exit Function
+    End If
+    b = st.Read
+    st.Close
+    If UBound(b) >= 2 Then
+        If b(0) = &HEF And b(1) = &HBB And b(2) = &HBF Then
+            cs = "utf-8"
+            encName = "UTF-8(BOM付き)"
+        End If
+    End If
+    If Len(cs) = 0 And UBound(b) >= 1 Then
+        If b(0) = &HFF And b(1) = &HFE Then
+            cs = "unicode"
+            encName = "UTF-16"
+        End If
+    End If
+    If Len(cs) = 0 Then
+        If Csv_IsUtf8(b, hasHigh) Then
+            cs = "utf-8"
+            encName = IIf(hasHigh, "UTF-8", "ASCII")
+        Else
+            cs = "shift_jis"
+            encName = "Shift-JIS"
+        End If
+    End If
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 2
+    st.Charset = cs
+    st.Open
+    st.LoadFromFile path
+    s = st.ReadText(-1)
+    st.Close
+    If Len(s) > 0 Then
+        If AscW(Left$(s, 1)) = &HFEFF Then s = Mid$(s, 2)
+    End If
+    Csv_ReadText = s
+End Function
+
+Private Function Csv_DetectDelim(ByVal txt As String) As String
+    Dim p As Long, head As String, nc As Long, nt As Long, ns As Long
+    p = InStr(txt, vbLf)
+    If p = 0 Then head = txt Else head = Left$(txt, p - 1)
+    nc = Len(head) - Len(Replace(head, ",", ""))
+    nt = Len(head) - Len(Replace(head, vbTab, ""))
+    ns = Len(head) - Len(Replace(head, ";", ""))
+    Csv_DetectDelim = ","
+    If nt > nc And nt >= ns Then Csv_DetectDelim = vbTab
+    If ns > nc And ns > nt Then Csv_DetectDelim = ";"
+End Function
+
+' 1レコード(引用符つきの、改行入りの項目も含む)を、項目に分ける
+Private Function Csv_SplitRec(ByVal rec As String, ByVal delim As String) As String()
+    Dim res() As String, n As Long, i As Long, L As Long
+    Dim ch As String, inQ As Boolean, cur As String
+    If InStr(rec, """") = 0 Then
+        Csv_SplitRec = Split(rec, delim)
+        Exit Function
+    End If
+    ReDim res(0 To 31)
+    n = -1
+    L = Len(rec)
+    i = 1
+    Do While i <= L
+        ch = Mid$(rec, i, 1)
+        If inQ Then
+            If ch = """" Then
+                If i < L And Mid$(rec, i + 1, 1) = """" Then
+                    cur = cur & """"
+                    i = i + 1
+                Else
+                    inQ = False
+                End If
+            Else
+                cur = cur & ch
+            End If
+        ElseIf ch = """" Then
+            inQ = True
+        ElseIf ch = delim Then
+            n = n + 1
+            If n > UBound(res) Then ReDim Preserve res(0 To UBound(res) * 2 + 1)
+            res(n) = cur
+            cur = ""
+        Else
+            cur = cur & ch
+        End If
+        i = i + 1
+    Loop
+    n = n + 1
+    If n > UBound(res) Then ReDim Preserve res(0 To UBound(res) * 2 + 1)
+    res(n) = cur
+    ReDim Preserve res(0 To n)
+    Csv_SplitRec = res
+End Function
+
+' 項目1つを、セルに入れる値にする。
+' ・=, +, @ で始まる文字は、数式として動かさず、文字のまま入れる(CSVの中の数式が、実行されるのを防ぐ)
+' ・001 のように先頭が 0 の番号や、16桁以上の番号は、文字のまま入れる(0や下の桁が消えないように)
+Private Function Csv_Cell(ByVal s As String) As Variant
+    Dim c1 As String
+    If Len(s) = 0 Then Exit Function
+    c1 = Left$(s, 1)
+    If c1 = "=" Or c1 = "+" Or c1 = "@" Then
+        Csv_Cell = "'" & s
+    ElseIf c1 = "-" And Not IsNumeric(s) Then
+        Csv_Cell = "'" & s
+    ElseIf Not (s Like "*[!0-9]*") And ((c1 = "0" And Len(s) > 1) Or Len(s) >= 16) Then
+        Csv_Cell = "'" & s
+    Else
+        Csv_Cell = s
+    End If
+End Function
+
+' 見出しの名前として使うため、先頭の ' を外した文字にする
+Private Function Csv_Plain(ByVal v As Variant) As String
+    Dim s As String
+    If IsEmpty(v) Then Exit Function
+    s = CStr(v)
+    If Left$(s, 1) = "'" Then s = Mid$(s, 2)
+    Csv_Plain = s
+End Function
+
+' CSV全体を、2次元の配列(行, 列)にする。空の行は飛ばす
+Private Function Csv_Parse(ByVal txt As String, ByRef nRows As Long, ByRef nCols As Long) As Variant
+    Dim delim As String, lines() As String, i As Long, ub As Long, rec As String
+    Dim recs() As Variant, cnt As Long, f() As String, r As Long, c As Long
+    Dim out() As Variant
+    txt = Replace(txt, vbCrLf, vbLf)
+    txt = Replace(txt, vbCr, vbLf)
+    delim = Csv_DetectDelim(txt)
+    lines = Split(txt, vbLf)
+    ub = UBound(lines)
+    ReDim recs(1 To 1024)
+    nCols = 0
+    i = 0
+    Do While i <= ub
+        rec = lines(i)
+        i = i + 1
+        Do While ((Len(rec) - Len(Replace(rec, """", ""))) Mod 2 = 1) And i <= ub
+            rec = rec & vbLf & lines(i)
+            i = i + 1
+        Loop
+        If Len(rec) > 0 Then
+            f = Csv_SplitRec(rec, delim)
+            cnt = cnt + 1
+            If cnt > UBound(recs) Then ReDim Preserve recs(1 To UBound(recs) * 2)
+            recs(cnt) = f
+            If UBound(f) + 1 > nCols Then nCols = UBound(f) + 1
+        End If
+    Loop
+    nRows = cnt
+    If cnt = 0 Then
+        Csv_Parse = Empty
+        Exit Function
+    End If
+    ReDim out(1 To cnt, 1 To nCols)
+    For r = 1 To cnt
+        f = recs(r)
+        For c = 0 To UBound(f)
+            out(r, c + 1) = Csv_Cell(f(c))
+        Next c
+        recs(r) = Empty
+    Next r
+    Csv_Parse = out
+End Function
+
+Private Function Csv_UniqueSheetName(ByVal baseName As String) As String
+    Dim nm As String, n As Long, ws As Object, hit As Boolean
+    nm = baseName
+    n = 1
+    Do
+        hit = False
+        For Each ws In ActiveWorkbook.Sheets
+            If StrComp(ws.Name, nm, vbTextCompare) = 0 Then hit = True: Exit For
+        Next ws
+        If Not hit Then Exit Do
+        n = n + 1
+        nm = baseName & "(" & n & ")"
+    Loop
+    Csv_UniqueSheetName = nm
+End Function
+
+' ---------------------------------------------------------------
+' 1. CSVを結合・読み込み
+' ---------------------------------------------------------------
+Sub Ribbon_CsvMerge(control As IRibbonControl)
+    Dim fd As Object, nF As Long, k As Long, i As Long, tmp As String
+    Dim paths() As String, hasHdr As Boolean, addSrc As Boolean, ans As VbMsgBoxResult
+    Dim ws As Worksheet, msg As String
+
+    Set fd = Application.FileDialog(3)
+    With fd
+        .TITLE = "結合・読み込みするCSVを選んでください(複数選べます)"
+        .AllowMultiSelect = True
+        .Filters.Clear
+        .Filters.Add "CSVファイル", "*.csv;*.txt"
+        .Filters.Add "すべてのファイル", "*.*"
+        If .Show <> -1 Then Exit Sub
+        nF = .SelectedItems.Count
+        ReDim paths(1 To nF)
+        For k = 1 To nF
+            paths(k) = .SelectedItems(k)
+        Next k
+    End With
+    ' ファイル名の順にそろえる(毎回、同じ順番になるように)
+    For k = 1 To nF - 1
+        For i = k + 1 To nF
+            If StrComp(paths(i), paths(k), vbTextCompare) < 0 Then tmp = paths(k): paths(k) = paths(i): paths(i) = tmp
+        Next i
+    Next k
+
+    ans = MsgBox("選んだ " & nF & " 個のCSVの1行目は、見出し(列の名前)ですか?" & vbCrLf & vbCrLf & _
+                 "はい … 見出しの名前で列をそろえて、結合します(列の並びが違っても大丈夫)" & vbCrLf & _
+                 "いいえ … 見出しなし。左から順に、積み重ねます" & vbCrLf & _
+                 "キャンセル … 中止", vbYesNoCancel + vbQuestion, TITLE)
+    If ans = vbCancel Then Exit Sub
+    hasHdr = (ans = vbYes)
+    addSrc = (MsgBox("先頭の列に、元のファイル名を入れますか?", vbYesNo + vbQuestion, TITLE) = vbYes)
+    Set ws = Csv_DoMerge(paths, hasHdr, addSrc, msg)
+    MsgBox msg, IIf(ws Is Nothing, vbExclamation, vbInformation), TITLE
+End Sub
+
+' 結合の本体。成功したら、新しいシートを返す(失敗したら Nothing)。msg に、ユーザーへの報告を入れる
+' paths は、1 から始まる配列
+Private Function Csv_DoMerge(paths() As String, ByVal hasHdr As Boolean, ByVal addSrc As Boolean, ByRef msg As String) As Worksheet
+    Dim nF As Long, k As Long, sc As Long
+    Dim names() As String, encs() As String
+    Dim datas() As Variant, maps() As Variant, rowsN() As Long, colsN() As Long
+    Dim hdrDict As Object, used As Object, hdrList() As String, nHdr As Long
+    Dim m() As Long, c As Long, nm As String, key As String, cnt As Long, txt As String
+    Dim totalRows As Long, startRow As Long, outCols As Long, nR As Long, r As Long, nxt As Long
+    Dim ws As Worksheet, a() As Variant, src As Variant, dataRows As Long
+    Dim diffCols As Boolean, shown As Long
+    nF = UBound(paths)
+    sc = IIf(addSrc, 1, 0)
+    startRow = IIf(hasHdr, 2, 1)
+
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    ReDim datas(1 To nF): ReDim maps(1 To nF)
+    ReDim rowsN(1 To nF): ReDim colsN(1 To nF)
+    ReDim names(1 To nF): ReDim encs(1 To nF)
+
+    ' 読み込み(CSVは書き換えない)
+    For k = 1 To nF
+        names(k) = Mid$(paths(k), InStrRev(paths(k), "\") + 1)
+        txt = Csv_ReadText(paths(k), encs(k))
+        datas(k) = Csv_Parse(txt, rowsN(k), colsN(k))
+        txt = ""
+    Next k
+
+    ' 列の対応づけ(見出しの名前、または左からの順)
+    Set hdrDict = CreateObject("Scripting.Dictionary")
+    hdrDict.CompareMode = vbTextCompare
+    ReDim hdrList(1 To 64)
+    For k = 1 To nF
+        If colsN(k) > 0 Then
+            src = datas(k)
+            ReDim m(1 To colsN(k))
+            If hasHdr Then
+                Set used = CreateObject("Scripting.Dictionary")
+                used.CompareMode = vbTextCompare
+                For c = 1 To colsN(k)
+                    nm = Trim$(Csv_Plain(src(1, c)))
+                    If Len(nm) = 0 Then nm = "(列" & c & ")"
+                    key = nm
+                    cnt = 1
+                    Do While used.Exists(key)
+                        cnt = cnt + 1
+                        key = nm & "(" & cnt & ")"
+                    Loop
+                    used.Add key, 1
+                    If Not hdrDict.Exists(key) Then
+                        nHdr = nHdr + 1
+                        hdrDict.Add key, nHdr
+                        If nHdr > UBound(hdrList) Then ReDim Preserve hdrList(1 To nHdr * 2)
+                        hdrList(nHdr) = key
+                    End If
+                    m(c) = hdrDict(key)
+                Next c
+            Else
+                For c = 1 To colsN(k)
+                    m(c) = c
+                Next c
+                If colsN(k) > nHdr Then nHdr = colsN(k)
+            End If
+            maps(k) = m
+        End If
+    Next k
+    If nHdr = 0 Then
+        Application.ScreenUpdating = True
+        msg = "読み込める行がありませんでした。"
+        Exit Function
+    End If
+
+    ' 行数の確認
+    totalRows = IIf(hasHdr, 1, 0)
+    For k = 1 To nF
+        If colsN(k) > 0 And rowsN(k) >= startRow Then totalRows = totalRows + rowsN(k) - startRow + 1
+        If colsN(k) <> nHdr Then diffCols = True
+    Next k
+    outCols = nHdr + sc
+    If totalRows > MAX_ROWS Or outCols > 16384 Then
+        Application.ScreenUpdating = True
+        msg = "Excelの上限(" & Format(MAX_ROWS, "#,##0") & " 行 / 16384 列)を超えるため、結合できません。"
+        Exit Function
+    End If
+
+    ' 書き出し(新しいシートに)
+    If Workbooks.Count = 0 Then Workbooks.Add
+    Set ws = ActiveWorkbook.Worksheets.Add(After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count))
+    ws.Name = Csv_UniqueSheetName("CSV結合")
+    nxt = 1
+    If hasHdr Then
+        ReDim a(1 To 1, 1 To outCols)
+        If addSrc Then a(1, 1) = "元ファイル"
+        For c = 1 To nHdr
+            a(1, sc + c) = Csv_Cell(hdrList(c))
+        Next c
+        ws.Cells(1, 1).Resize(1, outCols).Value2 = a
+        nxt = 2
+    End If
+    For k = 1 To nF
+        If colsN(k) > 0 And rowsN(k) >= startRow Then
+            src = datas(k)
+            m = maps(k)
+            nR = rowsN(k) - startRow + 1
+            ReDim a(1 To nR, 1 To outCols)
+            For r = 1 To nR
+                If addSrc Then a(r, 1) = Csv_Cell(names(k))
+                For c = 1 To colsN(k)
+                    a(r, sc + m(c)) = src(r + startRow - 1, c)
+                Next c
+            Next r
+            ws.Cells(nxt, 1).Resize(nR, outCols).Value2 = a
+            nxt = nxt + nR
+            dataRows = dataRows + nR
+        End If
+        datas(k) = Empty
+    Next k
+    If hasHdr Then ws.Rows(1).Font.Bold = True
+    If totalRows <= 50000 Then ws.Columns.AutoFit
+    ws.Activate
+    ws.Cells(1, 1).Select
+    Application.ScreenUpdating = True
+
+    ' 報告(検算つき)
+    msg = "結合しました。新しいシート「" & ws.Name & "」を見てください。" & vbCrLf & vbCrLf
+    For k = 1 To nF
+        If shown >= 15 Then Exit For
+        shown = shown + 1
+        msg = msg & names(k) & " … " & encs(k) & " / " & IIf(colsN(k) > 0, rowsN(k) - IIf(hasHdr, 1, 0), 0) & " 行" & vbCrLf
+    Next k
+    If nF > shown Then msg = msg & "ほか " & (nF - shown) & " 個" & vbCrLf
+    msg = msg & vbCrLf & "合計 " & Format(dataRows, "#,##0") & " 行" & IIf(hasHdr, "(見出しを除く)", "") & " / " & nHdr & " 列" & vbCrLf
+    If (nxt - 1) = totalRows Then
+        msg = msg & "検算: 書き込んだ行数が、各ファイルの行数の合計と一致しました。"
+    Else
+        msg = msg & "検算: 行数が一致しません。結果を確認してください。"
+    End If
+    If diffCols Then msg = msg & vbCrLf & "※ ファイルによって列の数が違います。ないところは空白です。"
+    Set Csv_DoMerge = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" & vbCrLf & Err.Description
+    If Not ws Is Nothing Then
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+    End If
+End Function
+
+' ---------------------------------------------------------------
+' 2. 列の並べ替え・選択(新しいシートに出す)
+' ---------------------------------------------------------------
+Sub Ribbon_CsvColumns(control As IRibbonControl)
+    Dim ws As Object, ur As Range, nc As Long, i As Long, prev As String
+    Dim spec As String, nw As Worksheet, msg As String
+    If Workbooks.Count = 0 Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ws = ActiveSheet
+    If TypeName(ws) <> "Worksheet" Then MsgBox "ワークシートを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ur = ws.UsedRange
+    If ur.Cells.CountLarge < 2 Then MsgBox "このシートには、データがありません。", vbExclamation, TITLE: Exit Sub
+    nc = ur.Columns.Count
+    For i = 1 To nc
+        If i > 30 Then prev = prev & "...(以降は省略)": Exit For
+        prev = prev & i & "=" & Left$(CStr(ur.Cells(1, i).Value), 8) & "  "
+    Next i
+    spec = InputBox("新しい列の順番を、番号か列の名前で、カンマで区切って入れてください。" & vbCrLf & _
+                    "例: 3,1,2   または   日付,金額" & vbCrLf & _
+                    "・書かなかった列は、新しいシートに出ません。" & vbCrLf & _
+                    "・同じ列を2回書くと、2回出ます。" & vbCrLf & vbCrLf & prev, TITLE, "")
+    If Len(Trim$(spec)) = 0 Then Exit Sub
+    Set nw = Csv_DoColumns(ws, spec, msg)
+    MsgBox msg, IIf(nw Is Nothing, vbExclamation, vbInformation), TITLE
+End Sub
+
+' 列の並べ替えの本体。成功したら、新しいシートを返す(失敗したら Nothing)。msg に、ユーザーへの報告を入れる
+Private Function Csv_DoColumns(ByVal ws As Object, ByVal spec As String, ByRef msg As String) As Worksheet
+    Dim ur As Range, nc As Long, i As Long, j As Long
+    Dim toks() As String, idx() As Long, t As String, tn As String, n As Long
+    Dim found As Long, bad As String, nw As Worksheet
+    Set ur = ws.UsedRange
+    nc = ur.Columns.Count
+    spec = Replace(Replace(spec, "、", ","), "，", ",")
+    toks = Split(spec, ",")
+    ReDim idx(1 To UBound(toks) + 1)
+    n = 0
+    For i = 0 To UBound(toks)
+        t = Trim$(toks(i))
+        If Len(t) > 0 Then
+            tn = StrConv(t, vbNarrow)
+            found = 0
+            If IsNumeric(tn) Then
+                If CDbl(tn) >= 1 And CDbl(tn) <= nc And CDbl(tn) = Int(CDbl(tn)) Then found = CLng(tn)
+            Else
+                For j = 1 To nc
+                    If StrComp(Trim$(CStr(ur.Cells(1, j).Value)), t, vbTextCompare) = 0 Then found = j: Exit For
+                Next j
+                If found = 0 And Len(tn) <= 3 And Not (tn Like "*[!A-Za-z]*") Then
+                    j = ws.Range(tn & "1").Column - ur.Column + 1
+                    If j >= 1 And j <= nc Then found = j
+                End If
+            End If
+            If found = 0 Then
+                bad = bad & "「" & t & "」"
+            Else
+                n = n + 1
+                idx(n) = found
+            End If
+        End If
+    Next i
+    If Len(bad) > 0 Then
+        msg = "次の指定は、列として見つかりませんでした: " & bad & vbCrLf & "もう一度、やり直してください。"
+        Exit Function
+    End If
+    If n = 0 Then
+        msg = "列が指定されていません。"
+        Exit Function
+    End If
+
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    Set nw = ActiveWorkbook.Worksheets.Add(After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count))
+    nw.Name = Csv_UniqueSheetName("列並べ替え")
+    For j = 1 To n
+        ur.Columns(idx(j)).Copy
+        nw.Cells(1, j).PasteSpecial Paste:=xlPasteValuesAndNumberFormats
+        nw.Columns(j).ColumnWidth = ur.Columns(idx(j)).ColumnWidth
+    Next j
+    Application.CutCopyMode = False
+    nw.Activate
+    nw.Cells(1, 1).Select
+    Application.ScreenUpdating = True
+    msg = "新しいシート「" & nw.Name & "」に、" & n & " 列を並べました。元のシートは、そのままです。" & vbCrLf & "(数式は、結果の値になります)"
+    Set Csv_DoColumns = nw
+    Exit Function
+EH:
+    Application.CutCopyMode = False
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" & vbCrLf & Err.Description
+End Function
+
+' ---------------------------------------------------------------
+' 3. 開いているシートを、CSVで保存
+' ---------------------------------------------------------------
+Private Function Csv_Field(ByVal v As Variant, ByRef errs As Long) As String
+    Dim s As String
+    Select Case VarType(v)
+        Case vbEmpty, vbNull
+            s = ""
+        Case vbError
+            s = ""
+            errs = errs + 1
+        Case vbDate
+            If CDbl(v) < 1 Then
+                s = Format$(v, "hh:nn:ss")
+            ElseIf CDbl(v) = Int(CDbl(v)) Then
+                s = Format$(v, "yyyy/mm/dd")
+            Else
+                s = Format$(v, "yyyy/mm/dd hh:nn:ss")
+            End If
+        Case vbBoolean
+            s = IIf(v, "TRUE", "FALSE")
+        Case Else
+            s = CStr(v)
+    End Select
+    If InStr(s, ",") > 0 Or InStr(s, """") > 0 Or InStr(s, vbLf) > 0 Or InStr(s, vbCr) > 0 _
+       Or Left$(s, 1) = " " Or Right$(s, 1) = " " Then
+        s = """" & Replace(s, """", """""") & """"
+    End If
+    Csv_Field = s
+End Function
+
+Private Sub Csv_WriteText(ByVal path As String, ByVal txt As String, ByVal cs As String)
+    Dim st As Object
+    Set st = CreateObject("ADODB.Stream")
+    st.Type = 2
+    st.Charset = cs
+    st.Open
+    st.WriteText txt
+    st.SaveToFile path, 2
+    st.Close
+End Sub
+
+Sub Ribbon_CsvSave(control As IRibbonControl)
+    Dim ws As Object, ur As Range
+    Dim ans As VbMsgBoxResult, cs As String, fn As Variant, path As String, msg As String, ok As Boolean
+    If Workbooks.Count = 0 Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ws = ActiveSheet
+    If TypeName(ws) <> "Worksheet" Then MsgBox "ワークシートを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ur = ws.UsedRange
+    If ur.Cells.CountLarge > 5000000 Then MsgBox "データが大きすぎます(500万セルまで)。", vbExclamation, TITLE: Exit Sub
+    ans = MsgBox("このシート「" & ws.Name & "」を、CSVで保存します。" & vbCrLf & vbCrLf & _
+                 "はい … Shift-JIS(日本のExcelや会計ソフトで開く用)" & vbCrLf & _
+                 "いいえ … UTF-8(BOM付き。海外のソフトやWeb用)" & vbCrLf & _
+                 "キャンセル … 中止" & vbCrLf & vbCrLf & _
+                 "※ 保存されるのは、セルの値だけです。数式は結果、色や罫線は保存されません。", _
+                 vbYesNoCancel + vbQuestion, TITLE)
+    If ans = vbCancel Then Exit Sub
+    cs = IIf(ans = vbYes, "shift_jis", "utf-8")
+    fn = Application.GetSaveAsFilename(InitialFileName:=ws.Name & ".csv", FileFilter:="CSVファイル (*.csv),*.csv", TITLE:="CSVの保存先")
+    If VarType(fn) = vbBoolean Then Exit Sub
+    path = CStr(fn)
+    If LCase$(Right$(path, 4)) <> ".csv" Then path = path & ".csv"
+    ok = Csv_DoSave(ws, path, cs, msg)
+    MsgBox msg, IIf(ok, vbInformation, vbExclamation), TITLE
+End Sub
+
+' 保存の本体。cs は "shift_jis" か "utf-8"。成功したら True。msg に、ユーザーへの報告を入れる
+Private Function Csv_DoSave(ByVal ws As Object, ByVal path As String, ByVal cs As String, ByRef msg As String) As Boolean
+    Dim ur As Range, data As Variant, one(1 To 1, 1 To 1) As Variant
+    Dim r As Long, c As Long, nR As Long, nc As Long, f() As String, lines() As String
+    Dim errs As Long, txt As String, back As String, enc As String
+    Set ur = ws.UsedRange
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    If ur.Cells.CountLarge = 1 Then
+        one(1, 1) = ur.Value
+        data = one
+    Else
+        data = ur.Value
+    End If
+    nR = UBound(data, 1)
+    nc = UBound(data, 2)
+    ReDim f(1 To nc)
+    ReDim lines(1 To nR)
+    For r = 1 To nR
+        For c = 1 To nc
+            f(c) = Csv_Field(data(r, c), errs)
+        Next c
+        lines(r) = Join(f, ",")
+    Next r
+    txt = Join(lines, vbCrLf) & vbCrLf
+    Csv_WriteText path, txt, cs
+    Application.ScreenUpdating = True
+
+    msg = "保存しました。" & vbCrLf & path & vbCrLf & nR & " 行 / " & nc & " 列"
+    If cs = "shift_jis" Then
+        back = Csv_ReadText(path, enc)
+        If back <> txt Then msg = msg & vbCrLf & vbCrLf & "※ Shift-JIS にない文字が、「?」に変わった可能性があります。UTF-8 でも保存できます。"
+    End If
+    If errs > 0 Then msg = msg & vbCrLf & vbCrLf & "※ エラー値のセルが " & errs & " 個ありました(空白で保存しました)。"
+    Csv_DoSave = True
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    msg = "うまくいきませんでした。" & vbCrLf & Err.Description
+End Function

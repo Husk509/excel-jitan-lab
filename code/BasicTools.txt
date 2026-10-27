@@ -1,0 +1,143 @@
+Attribute VB_Name = "BasicTools"
+Option Explicit
+
+' 便利ツール 基本機能(A1に戻して保存 / 空白行の削除 / ブック全体のPDF出力)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。ネットへの送信は、しない。
+' BT_ で始まる関数は、画面(確認の表示)を出さずに、処理だけを行う。
+
+Private Const TITLE As String = "便利ツール"
+Private mLastErr As String
+
+Private Function BT_Ask(ByVal msg As String) As Boolean
+    BT_Ask = (MsgBox(msg, vbYesNo + vbQuestion + vbDefaultButton2, TITLE) = vbYes)
+End Function
+
+' ---- 1. 全シートのカーソルを A1 に戻して、保存する ----
+' 全シートのカーソルを A1 に戻す。処理できなかったシートの数を返す(保存は、しない)
+Public Function BT_MoveToA1(ByVal wb As Workbook) As Long
+    Dim ws As Object, firstWs As Object, skipped As Long
+    On Error Resume Next
+    wb.Activate
+    On Error GoTo 0
+    For Each ws In wb.Sheets
+        If ws.Visible = xlSheetVisible Then
+            If firstWs Is Nothing Then Set firstWs = ws
+            On Error Resume Next
+            Err.Clear
+            ws.Activate
+            If TypeName(ws) = "Worksheet" Then
+                ActiveWindow.ScrollRow = 1
+                ActiveWindow.ScrollColumn = 1
+                ws.Range("A1").Select
+            End If
+            If Err.Number <> 0 Then skipped = skipped + 1
+            On Error GoTo 0
+        End If
+    Next ws
+    If Not firstWs Is Nothing Then
+        On Error Resume Next
+        firstWs.Activate
+        On Error GoTo 0
+    End If
+    BT_MoveToA1 = skipped
+End Function
+
+Sub Ribbon_AutoSaveA1(control As IRibbonControl)
+    Dim wb As Workbook, n As Long
+    If ActiveWorkbook Is Nothing Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set wb = ActiveWorkbook
+    If wb.Path = "" Then MsgBox "このブックは、まだ一度も保存されていません。先に、名前を付けて保存してください。", vbExclamation, TITLE: Exit Sub
+    If wb.ReadOnly Then MsgBox "このブックは、読み取り専用です。保存できません。", vbExclamation, TITLE: Exit Sub
+    If Not BT_Ask("全シートのカーソルを A1 に戻して、ブックを上書き保存します。" & vbCrLf & vbCrLf & "よろしいですか?") Then Exit Sub
+    On Error GoTo EH
+    n = BT_MoveToA1(wb)
+    wb.Save
+    MsgBox "全シートのカーソルを A1 に戻して、保存しました。" & IIf(n > 0, vbCrLf & "(処理できなかったシート: " & n & ")", ""), vbInformation, TITLE
+    Exit Sub
+EH:
+    MsgBox "保存できませんでした。(" & Err.Description & ")", vbExclamation, TITLE
+End Sub
+
+' ---- 2. 空白行の削除 ----
+' データの中にある、すべてのセルが空の行を、下から削除する。削除した行数を返す
+' (数式が入っている行は、空白とみなさない。データより上の空行は、触らない)
+Public Function BT_DeleteBlankRows(ByVal ws As Worksheet) As Long
+    Dim ur As Range, r As Long, firstRow As Long, lastRow As Long, c1 As Long, c2 As Long, cnt As Long
+    If Application.WorksheetFunction.CountA(ws.UsedRange) = 0 Then Exit Function
+    Set ur = ws.UsedRange
+    firstRow = ur.Row
+    lastRow = ur.Row + ur.Rows.Count - 1
+    c1 = ur.Column
+    c2 = ur.Column + ur.Columns.Count - 1
+    For r = lastRow To firstRow Step -1
+        If Application.WorksheetFunction.CountA(ws.Range(ws.Cells(r, c1), ws.Cells(r, c2))) = 0 Then
+            ws.Rows(r).Delete
+            cnt = cnt + 1
+        End If
+    Next r
+    BT_DeleteBlankRows = cnt
+End Function
+
+Sub Ribbon_DeleteBlankRows(control As IRibbonControl)
+    Dim ws As Object, n As Long
+    If ActiveWorkbook Is Nothing Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set ws = ActiveSheet
+    If TypeName(ws) <> "Worksheet" Then MsgBox "ワークシートを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    If ws.ProtectContents Then MsgBox "このシートは、保護されています。保護を解除してから、押してください。", vbExclamation, TITLE: Exit Sub
+    If Not BT_Ask("シート「" & ws.Name & "」の、データの中にある空白の行(すべてのセルが空の行)を、削除します。" & vbCrLf & _
+                  "数式が入っている行は、空白とみなしません。" & vbCrLf & vbCrLf & _
+                  "※ 元に戻せません。心配なら、先に、ファイルのコピーを取ってください。" & vbCrLf & vbCrLf & _
+                  "よろしいですか?") Then Exit Sub
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    n = BT_DeleteBlankRows(ws)
+    Application.ScreenUpdating = True
+    If n = 0 Then
+        MsgBox "空白の行は、ありませんでした。", vbInformation, TITLE
+    Else
+        MsgBox n & " 行の空白行を、削除しました。", vbInformation, TITLE
+    End If
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "削除できませんでした。(" & Err.Description & ")", vbExclamation, TITLE
+End Sub
+
+' ---- 3. ブック全体を、1つの PDF にする ----
+' 成功したら True を返す。失敗の理由は、mLastErr に残す
+Public Function BT_ExportPdf(ByVal wb As Workbook, ByVal path As String) As Boolean
+    On Error GoTo EH
+    mLastErr = ""
+    wb.ExportAsFixedFormat Type:=xlTypePDF, Filename:=path, Quality:=xlQualityStandard, _
+        IncludeDocProperties:=True, IgnorePrintAreas:=False, OpenAfterPublish:=False
+    BT_ExportPdf = True
+    Exit Function
+EH:
+    mLastErr = Err.Description
+    BT_ExportPdf = False
+End Function
+
+Sub Ribbon_ExportAllToPDF(control As IRibbonControl)
+    Dim wb As Workbook, base As String, init As String, f As Variant, p As String
+    If ActiveWorkbook Is Nothing Then MsgBox "ブックを開いてから、押してください。", vbExclamation, TITLE: Exit Sub
+    Set wb = ActiveWorkbook
+    base = wb.Name
+    If InStrRev(base, ".") > 0 Then base = Left$(base, InStrRev(base, ".") - 1)
+    init = base & ".pdf"
+    If wb.Path <> "" And LCase$(Left$(wb.Path, 4)) <> "http" Then init = wb.Path & Application.PathSeparator & init
+    f = Application.GetSaveAsFilename(InitialFileName:=init, FileFilter:="PDFファイル (*.pdf),*.pdf", Title:="PDFの保存先")
+    If VarType(f) = vbBoolean Then Exit Sub
+    p = CStr(f)
+    If LCase$(Right$(p, 4)) <> ".pdf" Then p = p & ".pdf"
+    If Dir(p) <> "" Then
+        If Not BT_Ask("同じ名前のファイルが、すでにあります。上書きしますか?" & vbCrLf & p) Then Exit Sub
+    End If
+    Application.StatusBar = "PDFを作成しています..."
+    If BT_ExportPdf(wb, p) Then
+        Application.StatusBar = False
+        MsgBox "ブック全体を、PDFにしました。" & vbCrLf & p, vbInformation, TITLE
+    Else
+        Application.StatusBar = False
+        MsgBox "PDFを作成できませんでした。(" & mLastErr & ")" & vbCrLf & "(印刷する内容のあるシートが、ないブックでは、作成できないことがあります)", vbExclamation, TITLE
+    End If
+End Sub

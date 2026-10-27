@@ -1,0 +1,237 @@
+Attribute VB_Name = "NewTools"
+Option Explicit
+
+' 便利ツール 追加機能(重複行の削除 / 見出し固定と列幅調整 / 数式を値に / 空白の強調 / 書式の統一 / シート複製 / シート名に日付)
+' リボンのボタン(customUI14.xml)の onAction から呼ばれる。ファイルの削除や、ネットへの送信は、しない。
+
+Private Const TITLE As String = "便利ツール"
+
+Private Function NT_Ask(ByVal msg As String) As Boolean
+    NT_Ask = (MsgBox(msg, vbYesNo + vbQuestion + vbDefaultButton2, TITLE) = vbYes)
+End Function
+
+Private Function NT_SelRange() As Range
+    ' 選択がセル範囲のときだけ返す(グラフなどを選んでいるときは Nothing)
+    If TypeName(Selection) = "Range" Then Set NT_SelRange = Selection
+End Function
+
+Private Function NT_SheetExists(ByVal nm As String) As Boolean
+    Dim ws As Object
+    For Each ws In ActiveWorkbook.Sheets
+        If StrComp(ws.Name, nm, vbTextCompare) = 0 Then NT_SheetExists = True: Exit Function
+    Next ws
+End Function
+
+' ---- 1. 重複行の削除 ----
+' Excel 標準の RemoveDuplicates は、この呼び出し方だと「引数が不正」になることがあるので、自分で重複を探して、下の行から削除する
+Sub Ribbon_RemoveDuplicates(control As IRibbonControl)
+    Dim rng As Range, ans As VbMsgBoxResult, data As Variant, dict As Object
+    Dim flags() As Boolean, r As Long, c As Long, key As String, startRow As Long, cnt As Long
+    Set rng = NT_SelRange()
+    If rng Is Nothing Then MsgBox "セル範囲を選んでから、押してください。", vbExclamation, TITLE: Exit Sub
+    If rng.Areas.Count > 1 Then MsgBox "範囲は、1か所だけ選んでください。", vbExclamation, TITLE: Exit Sub
+    If rng.Cells.CountLarge = 1 Then Set rng = rng.CurrentRegion
+    If rng.Rows.Count < 2 Then MsgBox "2行以上のデータを選んでください。", vbExclamation, TITLE: Exit Sub
+    ans = MsgBox("範囲 " & rng.Address(False, False) & " で、すべての列が同じ行を、重複として削除します(最初の1行は残します)。" & vbCrLf & vbCrLf & _
+                 "1行目は、見出しですか?" & vbCrLf & _
+                 "  はい … 見出し(削除の対象にしない)" & vbCrLf & _
+                 "  いいえ … 見出しなし" & vbCrLf & _
+                 "  キャンセル … 中止" & vbCrLf & vbCrLf & _
+                 "※ 元に戻せません。心配なら、先に、ファイルのコピーを取ってください。", _
+                 vbYesNoCancel + vbQuestion + vbDefaultButton3, TITLE)
+    If ans = vbCancel Then Exit Sub
+    startRow = IIf(ans = vbYes, 2, 1)
+    On Error GoTo EH
+    data = rng.Value2
+    Set dict = CreateObject("Scripting.Dictionary")
+    dict.CompareMode = vbTextCompare
+    ReDim flags(1 To UBound(data, 1))
+    For r = startRow To UBound(data, 1)
+        key = ""
+        For c = 1 To UBound(data, 2)
+            If IsError(data(r, c)) Then
+                key = key & "#E" & Chr(1)
+            Else
+                key = key & CStr(data(r, c)) & Chr(1)
+            End If
+        Next c
+        If dict.Exists(key) Then
+            flags(r) = True
+            cnt = cnt + 1
+        Else
+            dict.Add key, 1
+        End If
+    Next r
+    If cnt = 0 Then MsgBox "重複した行は、ありませんでした。", vbInformation, TITLE: Exit Sub
+    Application.ScreenUpdating = False
+    For r = UBound(data, 1) To startRow Step -1
+        If flags(r) Then rng.Rows(r).Delete Shift:=xlUp
+    Next r
+    Application.ScreenUpdating = True
+    MsgBox cnt & " 行の重複を、削除しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "削除できませんでした。(" & Err.Description & ")", vbExclamation, TITLE
+End Sub
+
+
+' ---- 2. 見出し行の固定と、列幅の自動調整(全シート) ----
+Sub Ribbon_FreezeAutoFit(control As IRibbonControl)
+    Dim ws As Worksheet, cur As Object, skipped As Long
+    If Not NT_Ask("全シートの、1行目を見出しとして固定し、列幅を自動調整します。" & vbCrLf & "(今ある固定と、列幅は、置き換わります)" & vbCrLf & vbCrLf & "よろしいですか?") Then Exit Sub
+    Set cur = ActiveSheet
+    Application.ScreenUpdating = False
+    For Each ws In ActiveWorkbook.Worksheets
+        If ws.Visible = xlSheetVisible Then
+            On Error Resume Next
+            Err.Clear
+            ws.Activate
+            ActiveWindow.FreezePanes = False
+            ActiveWindow.ScrollRow = 1
+            ActiveWindow.ScrollColumn = 1
+            ws.Range("A2").Select
+            ActiveWindow.FreezePanes = True
+            ws.Range("A1").Select
+            ws.UsedRange.Columns.AutoFit
+            If Err.Number <> 0 Then skipped = skipped + 1
+            On Error GoTo 0
+        End If
+    Next ws
+    cur.Activate
+    Application.ScreenUpdating = True
+    MsgBox "完了しました。" & IIf(skipped > 0, vbCrLf & "(保護されているなどで、処理できなかったシート: " & skipped & ")", ""), vbInformation, TITLE
+End Sub
+
+' ---- 3. 全シートの書式の統一 ----
+Sub Ribbon_UnifyFormat(control As IRibbonControl)
+    Dim ws As Worksheet, cur As Object, fnt As String, sz As Double, skipped As Long
+    If Not NT_Ask("全シートの、データのある範囲に、次の書式をそろえます。" & vbCrLf & _
+                  "  ・フォント … いま開いているシートの A1 と同じ" & vbCrLf & _
+                  "  ・細い罫線(薄いグレー)" & vbCrLf & _
+                  "  ・1行目 … 太字、薄いグレーの背景" & vbCrLf & vbCrLf & _
+                  "※ 元に戻せません。よろしいですか?") Then Exit Sub
+    Set cur = ActiveSheet
+    fnt = cur.Range("A1").Font.Name
+    sz = cur.Range("A1").Font.Size
+    Application.ScreenUpdating = False
+    For Each ws In ActiveWorkbook.Worksheets
+        If ws.Visible = xlSheetVisible Then
+            If Application.WorksheetFunction.CountA(ws.UsedRange) > 0 Then
+                On Error Resume Next
+                Err.Clear
+                With ws.UsedRange
+                    .Font.Name = fnt
+                    .Font.Size = sz
+                    .Borders.LineStyle = xlContinuous
+                    .Borders.Weight = xlThin
+                    .Borders.Color = RGB(191, 191, 191)
+                    .Rows(1).Font.Bold = True
+                    .Rows(1).Interior.Color = RGB(242, 242, 242)
+                End With
+                If Err.Number <> 0 Then skipped = skipped + 1
+                On Error GoTo 0
+            End If
+        End If
+    Next ws
+    Application.ScreenUpdating = True
+    MsgBox "完了しました。" & IIf(skipped > 0, vbCrLf & "(保護されているなどで、処理できなかったシート: " & skipped & ")", ""), vbInformation, TITLE
+End Sub
+
+' ---- 4. 数式を値に変換 ----
+Sub Ribbon_ToValues(control As IRibbonControl)
+    Dim rng As Range, a As Range, r As Range
+    Set rng = NT_SelRange()
+    If rng Is Nothing Then MsgBox "セル範囲を選んでから、押してください。", vbExclamation, TITLE: Exit Sub
+    If Not NT_Ask("選んだ範囲 " & rng.Address(False, False) & " の数式を、結果の値に置き換えます。" & vbCrLf & _
+                  "数式は、なくなります。元に戻せません。" & vbCrLf & vbCrLf & "よろしいですか?") Then Exit Sub
+    On Error GoTo EH
+    For Each a In rng.Areas
+        Set r = Intersect(a, a.Worksheet.UsedRange)    ' 列全体などを選んだときに、重くならないように
+        If Not r Is Nothing Then r.Value = r.Value
+    Next a
+    MsgBox "値に変換しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    MsgBox "変換できませんでした。(" & Err.Description & ")", vbExclamation, TITLE
+End Sub
+
+' ---- 5. 空白セルの強調 / 解除 ----
+Sub Ribbon_HighlightBlank(control As IRibbonControl)
+    Dim target As Range, ans As VbMsgBoxResult, fc As Object, i As Long
+    Set target = NT_SelRange()
+    If target Is Nothing Then Set target = ActiveSheet.UsedRange
+    If target.Cells.CountLarge = 1 Then Set target = ActiveSheet.UsedRange
+    ans = MsgBox("範囲 " & target.Address(False, False) & " の空白セルを、色で強調します(条件付き書式)。" & vbCrLf & vbCrLf & _
+                 "  はい … 黄色で強調する" & vbCrLf & _
+                 "  いいえ … 空白の強調を解除する" & vbCrLf & _
+                 "  キャンセル … 中止", vbYesNoCancel + vbQuestion, TITLE)
+    If ans = vbCancel Then Exit Sub
+    On Error GoTo EH
+    If ans = vbYes Then
+        Set fc = target.FormatConditions.Add(Type:=xlBlanksCondition)
+        fc.SetFirstPriority
+        fc.Interior.Color = RGB(255, 242, 102)
+    Else
+        For i = target.FormatConditions.Count To 1 Step -1
+            If target.FormatConditions(i).Type = xlBlanksCondition Then target.FormatConditions(i).Delete
+        Next i
+    End If
+    MsgBox "完了しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    MsgBox "処理できませんでした。(" & Err.Description & ")", vbExclamation, TITLE
+End Sub
+
+' ---- 6. シートの複製(連番) ----
+Sub Ribbon_CopySheet(control As IRibbonControl)
+    Dim s As String, n As Long, i As Long, k As Long, src As Object, base As String, nm As String, suffix As String
+    If ActiveSheet Is Nothing Then Exit Sub
+    s = InputBox("いま開いているシート「" & ActiveSheet.Name & "」を、何枚、複製しますか?(1?50)" & vbCrLf & "名前は、「元の名前_1」「元の名前_2」…になります。", TITLE, "3")
+    If Len(s) = 0 Then Exit Sub
+    If Not IsNumeric(s) Then MsgBox "数字で入力してください。", vbExclamation, TITLE: Exit Sub
+    n = CLng(s)
+    If n < 1 Or n > 50 Then MsgBox "1?50の数字にしてください。", vbExclamation, TITLE: Exit Sub
+    Set src = ActiveSheet
+    base = src.Name
+    On Error GoTo EH
+    Application.ScreenUpdating = False
+    For i = 1 To n
+        Do
+            k = k + 1
+            suffix = "_" & k
+            nm = Left$(base, 31 - Len(suffix)) & suffix
+        Loop While NT_SheetExists(nm)
+        src.Copy After:=ActiveWorkbook.Sheets(ActiveWorkbook.Sheets.Count)
+        ActiveSheet.Name = nm
+        src.Activate
+    Next i
+    Application.ScreenUpdating = True
+    MsgBox n & " 枚、複製しました。", vbInformation, TITLE
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "途中で止まりました。(" & Err.Description & ")", vbExclamation, TITLE
+End Sub
+
+' ---- 7. シート名の先頭に、日付(yyyymmdd_)を付ける ----
+Sub Ribbon_RenameSheets(control As IRibbonControl)
+    Dim ws As Object, pre As String, nm As String, done As Long, skipped As Long
+    pre = Format(Date, "yyyymmdd") & "_"
+    If Not NT_Ask("全シートの名前の先頭に、「" & pre & "」を付けます。(31文字を超える分は、後ろを切ります)" & vbCrLf & vbCrLf & "よろしいですか?") Then Exit Sub
+    On Error Resume Next
+    For Each ws In ActiveWorkbook.Sheets
+        If Left$(ws.Name, Len(pre)) <> pre Then
+            nm = Left$(pre & ws.Name, 31)
+            If NT_SheetExists(nm) Then
+                skipped = skipped + 1
+            Else
+                Err.Clear
+                ws.Name = nm
+                If Err.Number <> 0 Then skipped = skipped + 1 Else done = done + 1
+            End If
+        End If
+    Next ws
+    On Error GoTo 0
+    MsgBox done & " 枚の名前を変えました。" & IIf(skipped > 0, vbCrLf & "(名前が重なるなどで、変えなかったシート: " & skipped & ")", ""), vbInformation, TITLE
+End Sub
